@@ -1,0 +1,46 @@
+실행 전 체크리스트
+
+1. MySQL 준비
+
+sql
+CREATE DATABASE warehouse_db
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+DB 자체는 미리 만들어두셔야 합니다 (테이블은 FastAPI가 자동 생성)
+
+2. 백엔드 .env 값 확인
+
+DATABASE_URL=mysql+pymysql://root:실제비밀번호@localhost:3306/warehouse_db?charset=utf8mb4
+root/비밀번호를 실제 MySQL 계정 정보로 바꿔야 합니다
+
+3. 백엔드 CORS 포트 확인
+main.py에서 Vite 기본 포트(5173)로 맞춰져 있는지 확인:
+
+python
+allow_origins=["http://localhost:5173"]
+실행 순서
+bash
+# 1) 백엔드
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload
+
+→ http://localhost:8000/docs 접속해서 Swagger에 5개 라우터(materials, companies, transactions, settlements, damage-history)가 다 보이는지, 그리고 MySQL 연결 에러 없이 뜨는지 확인
+
+bash
+# 2) 프론트엔드 (새 터미널)
+cd frontend
+npm install
+npm run dev
+
+→ http://localhost:5173 접속
+
+테스트 순서 (실제 데이터 흐름 확인용)
+자재 관리 화면에서 자재 1개 등록 (예: 굴삭기)
+거래처 관리 화면에서 거래처 1개 등록 (예: OO건설)
+반입/반출 등록 화면에서 방금 만든 자재/거래처로 "반입" 거래 등록
+재고 현황 화면에서 수량 반영됐는지 확인
+막힐 수 있는 지점 미리 안내
+MySQL 연결 에러: .env의 비밀번호/포트/DB명 오타 가능성이 제일 큼
+CORS 에러 (브라우저 콘솔에 빨간 에러): 포트 안 맞으면 발생 — 위 3번 항목 확인
+404/422 에러: 라우터 경로나 요청 body 형식 문제 — Swagger(/docs)에서 먼저 단독 테스트해보면 원인 파악 쉬움

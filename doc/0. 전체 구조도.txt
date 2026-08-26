@@ -1,0 +1,61 @@
+전체 프로젝트 폴더 구조 정리해드릴게요.
+
+warehouse-project/                     ← 프로젝트 최상위 폴더
+│
+├── backend/                           ← FastAPI 백엔드
+│   ├── venv/                          ← 가상환경 (자동 생성됨, 직접 안 건드림)
+│   │
+│   ├── main.py                        ← 앱 진입점
+│   ├── database.py                    ← DB 연결 설정
+│   ├── models.py                      ← SQLAlchemy 테이블 모델
+│   ├── schemas.py                     ← Pydantic 요청/응답 스키마
+│   ├── requirements.txt               ← 필요 패키지 목록
+│   ├── .env                           ← DB 접속 정보 (비밀번호 등)
+│   │
+│   ├── routers/                       ← API 엔드포인트 모음
+│   │   ├── __init__.py
+│   │   ├── materials.py
+│   │   ├── companies.py
+│   │   ├── transactions.py
+│   │   ├── settlements.py
+│   │   └── damage.py
+│   │
+│   └── services/
+│       └── notification.py            ← 반납 알림 스케줄러
+│
+└── frontend/                          ← React 프론트엔드
+    ├── node_modules/                  ← 자동 생성됨 (직접 안 건드림)
+    │
+    ├── src/
+    │   ├── main.jsx                   ← 진입점 (ThemeProvider 적용)
+    │   ├── App.jsx                    ← 라우팅 설정
+    │   ├── theme.js                   ← 보라빛 테마 설정
+    │   │
+    │   ├── api/
+    │   │   ├── client.js              ← axios 기본 설정
+    │   │   └── index.js               ← API 함수 모음
+    │   │
+    │   ├── components/
+    │   │   ├── Sidebar.jsx            ← 좌측 메뉴
+    │   │   └── Table.jsx              ← 재사용 테이블
+    │   │
+    │   └── pages/
+    │       ├── Materials.jsx          ← 자재 관리
+    │       ├── Companies.jsx          ← 거래처 관리
+    │       ├── TransactionForm.jsx    ← 반입/반출 등록
+    │       ├── InventoryStatus.jsx    ← 재고 현황
+    │       ├── ReturnAlerts.jsx       ← 반납 알림
+    │       ├── Settlements.jsx        ← 정산 관리
+    │       └── DamageHistory.jsx      ← 분실/파손 이력
+    │
+    ├── package.json                   ← 자동 생성됨 (프로젝트 설정)
+    └── index.html                     ← 자동 생성됨 (Vite 기본)
+    
+만드는 순서 (참고)
+warehouse-project 폴더 하나 만들고
+그 안에서 backend 폴더 만들어서 지금까지 드린 백엔드 코드 파일들 생성
+같은 위치(warehouse-project 안)에서 npm create vite@latest frontend -- --template react 실행하면 frontend 폴더가 자동으로 생김
+frontend/src 안에 api, components, pages 폴더 만들고 그 안에 코드 채워넣기
+
+venv, node_modules, package.json, index.html 같은 건 명령어 실행하면 자동 생성되는 파일이라 직접 만드실 필요 없어요.
+ 나머지(.py, .jsx, .js)만 하나씩 만들어서 지금까지 드린 코드 붙여넣으시면 됩니다.

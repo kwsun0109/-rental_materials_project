@@ -1,0 +1,293 @@
+1. 데이터베이스 설계 (PostgreSQL)
+
+앞서 다이어그램 기준으로 반입/반출 기록이 중심 테이블이고, 나머지는 여기서 파생/집계됩니다.
+
+sql
+-- 자재 마스터
+CREATE TABLE materials (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    category VARCHAR(50),
+    unit VARCHAR(20),              -- 개, 대, kg 등
+    total_qty INTEGER DEFAULT 0,   -- 보유 총 수량
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 거래처(업체) 마스터
+CREATE TABLE companies (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    contact VARCHAR(50),
+    address VARCHAR(200),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 반입/반출 기록 (모든 데이터의 출발점)
+CREATE TABLE transactions (
+    id SERIAL PRIMARY KEY,
+    material_id INTEGER REFERENCES materials(id),
+    company_id INTEGER REFERENCES companies(id),
+    type VARCHAR(10) NOT NULL CHECK (type IN ('반입', '반출')),
+    qty INTEGER NOT NULL,
+    rental_start_date DATE,        -- 반출 시 임대 시작일
+    rental_due_date DATE,          -- 반납 예정일 (반납 알림용)
+    returned_at TIMESTAMP,         -- 실제 반납일 (NULL = 아직 미반납)
+    note TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 정산 관리 (transactions 집계 기반)
+CREATE TABLE settlements (
+    id SERIAL PRIMARY KEY,
+    company_id INTEGER REFERENCES companies(id),
+    period_start DATE,
+    period_end DATE,
+    amount NUMERIC(12,2),
+    status VARCHAR(20) DEFAULT '미정산' CHECK (status IN ('미정산', '정산완료')),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 분실/파손 이력
+CREATE TABLE damage_history (
+    id SERIAL PRIMARY KEY,
+    transaction_id INTEGER REFERENCES transactions(id),
+    type VARCHAR(10) CHECK (type IN ('분실', '파손')),
+    description TEXT,
+    responsible_party VARCHAR(100),  -- 책임 소재
+    resolved BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+재고 현황은 별도 테이블이 아니라 뷰(View)로 실시간 집계:
+
+sql
+CREATE VIEW inventory_status AS
+SELECT
+    m.id,
+    m.name,
+    m.total_qty,
+    m.total_qty - COALESCE(SUM(
+        CASE WHEN t.type = '반출' AND t.returned_at IS NULL THEN t.qty ELSE 0 END
+    ), 0) AS available_qty
+FROM materials m
+LEFT JOIN transactions t ON m.id = t.material_id
+GROUP BY m.id, m.name, m.total_qty;
+
+반납 알림은 테이블이 아니라, 백엔드 스케줄러가 아래 쿼리로 매일 체크:
+
+sql
+SELECT * FROM transactions
+WHERE type = '반출' AND returned_at IS NULL AND rental_due_date <= CURRENT_DATE + 3;
+
+2. 백엔드 설계 (Python/FastAPI)
+
+Python이면 FastAPI를 추천해요. 가볍고, 자동 API 문서(Swagger) 생성되고, React 프론트와 붙이기 쉬워요.
+
+폴더 구조
+
+backend/
+├── main.py                   # 앱 진입점
+├── database.py               # DB 연결 (SQLAlchemy)
+├── models.py                 # 테이블 모델 (SQLAlchemy ORM)
+├── schemas.py                # 요청/응답 검증 (Pydantic)
+├── routers/
+│   ├── materials.py
+│   ├── companies.py
+│   ├── transactions.py
+│   ├── settlements.py
+│   └── damage.py
+├── services/
+│   └── notification.py       # 반납 알림 스케줄러
+└── requirements.txt
+
+핵심 라이브러리
+
+fastapi — API 프레임워크
+sqlalchemy — ORM
+psycopg2-binary — PostgreSQL 드라이버
+pydantic — 데이터 검증
+apscheduler — 반납 알림 스케줄링 (매일 체크)
+
+API 엔드포인트 예시
+
+POST   /transactions                 # 반입/반출 등록 (시스템의 시작점)
+GET    /inventory                    # 재고 현황 조회
+GET    /transactions/due-soon        # 반납 예정 임박 목록
+POST   /settlements                  # 정산 생성
+GET    /settlements/{company_id}
+POST   /damage-history               # 분실/파손 기록
+3. 프론트엔드 설계 (React)
+
+폴더 구조
+
+frontend/
+├── src/
+│   ├── pages/
+│   │   ├── TransactionForm.jsx      # 반입/반출 등록
+│   │   ├── InventoryStatus.jsx      # 재고 현황
+│   │   ├── ReturnAlerts.jsx         # 반납 알림
+│   │   ├── Settlements.jsx          # 정산 관리
+│   │   └── DamageHistory.jsx        # 분실/파손 이력
+│   ├── components/
+│   │   ├── Sidebar.jsx
+│   │   └── Table.jsx
+│   ├── api/
+│   │   └── client.js                # axios 등으로 백엔드 API 호출
+│   └── App.jsx
+
+상태 관리: 이 규모면 Redux 같은 건 오버스펙, useState + useEffect나 가벼운 React Query(서버 상태 캐싱) 정도면 충분
+UI 라이브러리: 빠르게 만들려면 MUI(Material UI)나 Ant Design 추천 — 표 형태 데이터가 많은 관리 시스템이라 테이블 컴포넌트가 잘 갖춰진 라이브러리가 편함
+
+전체 흐름 요약
+[React 프론트]
+  ↓ (axios로 API 호출)
+[FastAPI 백엔드]
+  ↓ (SQLAlchemy ORM)
+[PostgreSQL DB]
+  - transactions (중심 테이블)
+  - materials, companies (마스터)
+  - settlements, damage_history (파생 데이터)
+  - inventory_status (뷰)
+  
+개발 순서 제안
+PostgreSQL 로컬 설치 → 위 스키마로 테이블 생성
+FastAPI로 transactions CRUD API부터 개발 (시스템의 출발점이니까)
+materials, companies CRUD 이어서 개발
+React로 반입/반출 등록 화면 먼저 (핵심 기능)
+재고 현황, 정산, 분실/파손 화면 순서로 추가
+
+DB 스키마부터 실제로 만들어보시겠어요? PostgreSQL 설치되면 위 SQL 그대로 실행해서 테이블 만드는 것부터 도와드릴 수 있어요.
+
+
+----------------------- 데이타 베이스 PostgreSQL ---> MySql 로 변경 ----------------------------
+
+1. 데이터베이스 설계 (MySQL)
+sql
+-- 자재 마스터
+CREATE TABLE materials (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    category VARCHAR(50),
+    unit VARCHAR(20),              -- 개, 대, kg 등
+    total_qty INT DEFAULT 0,       -- 보유 총 수량
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 거래처(업체) 마스터
+CREATE TABLE companies (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    contact VARCHAR(50),
+    address VARCHAR(200),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;;
+
+-- 반입/반출 기록 (모든 데이터의 출발점)
+CREATE TABLE transactions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    material_id INT,
+    company_id INT,
+    type VARCHAR(10) NOT NULL,
+    qty INT NOT NULL,
+    rental_start_date DATE,        -- 반출 시 임대 시작일
+    rental_due_date DATE,          -- 반납 예정일 (반납 알림용)
+    returned_at TIMESTAMP NULL,    -- 실제 반납일 (NULL = 아직 미반납)
+    note TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_type CHECK (type IN ('반입', '반출')),
+    FOREIGN KEY (material_id) REFERENCES materials(id),
+    FOREIGN KEY (company_id) REFERENCES companies(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;;
+
+-- 정산 관리 (transactions 집계 기반)
+CREATE TABLE settlements (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_id INT,
+    period_start DATE,
+    period_end DATE,
+    amount DECIMAL(12,2),
+    status VARCHAR(20) DEFAULT '미정산',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_status CHECK (status IN ('미정산', '정산완료')),
+    FOREIGN KEY (company_id) REFERENCES companies(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;;
+
+-- 분실/파손 이력
+CREATE TABLE damage_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    transaction_id INT,
+    type VARCHAR(10),
+    description TEXT,
+    responsible_party VARCHAR(100),  -- 책임 소재
+    resolved BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_damage_type CHECK (type IN ('분실', '파손')),
+    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;;
+
+⚠️ CHECK 제약은 MySQL 8.0.16 이상부터 실제로 강제됩니다. 그 이전 버전(5.7 등)에서는 문법상 허용되지만 무시됩니다. 
+	버전이 낮다면 애플리케이션(백엔드) 레벨에서 값 검증을 해줘야 합니다.
+
+재고 현황 뷰(View)는 동일하게 동작합니다:
+
+sql
+CREATE VIEW inventory_status AS
+SELECT
+    m.id,
+    m.name,
+    m.total_qty,
+    m.total_qty - COALESCE(SUM(
+        CASE WHEN t.type = '반출' AND t.returned_at IS NULL THEN t.qty ELSE 0 END
+    ), 0) AS available_qty
+FROM materials m
+LEFT JOIN transactions t ON m.id = t.material_id
+GROUP BY m.id, m.name, m.total_qty;
+
+반납 알림 체크 쿼리는 날짜 연산 문법만 다릅니다 (CURRENT_DATE + 3 → DATE_ADD):
+
+sql
+SELECT * FROM transactions
+WHERE type = '반출' 
+  AND returned_at IS NULL 
+  AND rental_due_date <= DATE_ADD(CURDATE(), INTERVAL 3 DAY);
+2. 백엔드 설계 (Python/FastAPI)
+
+폴더 구조와 API 엔드포인트는 PostgreSQL 버전과 동일합니다. 바뀌는 건 DB 드라이버와 연결 설정뿐입니다.
+
+핵심 라이브러리
+
+fastapi
+sqlalchemy
+pymysql              # MySQL 드라이버 (psycopg2-binary 대신)
+pydantic
+apscheduler
+
+database.py 연결 설정 예시
+
+python
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+DATABASE_URL = "mysql+pymysql://user:password@localhost:3306/dbname"
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+pymysql 대신 mysqlclient(C 확장, 속도 더 빠름)를 써도 됩니다. 
+이 경우 URL은 mysql+mysqldb://... 형식이고, 설치 시 시스템에 libmysqlclient-dev 같은 패키지가 필요합니다. 
+로컬 개발 단계에서는 설치가 간편한 pymysql을 추천합니다.
+
+API 엔드포인트, 폴더 구조, services/notification.py 스케줄러 로직은 PostgreSQL 버전 그대로 재사용하면 됩니다.
+
+3. 프론트엔드 설계 (React)
+
+프론트엔드는 DB 종류와 무관하게 완전히 동일합니다 — API를 호출하는 입장이라 백엔드가 MySQL을 쓰든 PostgreSQL을 쓰든 차이가 없습니다.
+
+정리: PostgreSQL과 달라지는 부분
+항목	PostgreSQL	MySQL
+PK 자동증가	SERIAL	INT AUTO_INCREMENT
+기본 타임스탬프	NOW()	CURRENT_TIMESTAMP
+금액 타입	NUMERIC(12,2)	DECIMAL(12,2)
+CHECK 제약	항상 강제	8.0.16+ 부터 강제
+날짜 연산	CURRENT_DATE + 3	DATE_ADD(CURDATE(), INTERVAL 3 DAY)
+Python 드라이버	psycopg2-binary	pymysql

@@ -1,0 +1,713 @@
+1. 프로젝트 구조
+backend/
+├── main.py
+├── database.py
+├── models.py
+├── schemas.py
+├── routers/
+│   ├── __init__.py
+│   ├── materials.py
+│   ├── companies.py
+│   ├── transactions.py
+│   ├── settlements.py
+│   └── damage.py
+├── services/
+│   └── notification.py
+├── requirements.txt
+└── .env
+
+2. requirements.txt
+fastapi
+uvicorn[standard]
+sqlalchemy
+pymysql
+pydantic
+python-dotenv
+apscheduler
+bash
+pip install -r requirements.txt
+3. .env
+DATABASE_URL=mysql+pymysql://root:your_password@localhost:3306/warehouse_db?charset=utf8mb4
+4. database.py
+python
+import os
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+pool_pre_ping=True는 MySQL 커넥션이 끊겼을 때(오랜 idle 후) 자동으로 재연결해주는 옵션이라 실무에서 거의 필수입니다.
+
+5. models.py (SQLAlchemy ORM)
+python
+from sqlalchemy import (
+    Column, Integer, String, Text, Boolean,
+    DECIMAL, Date, TIMESTAMP, ForeignKey, CheckConstraint, func
+)
+from sqlalchemy.orm import relationship
+from database import Base
+
+
+class Material(Base):
+    __tablename__ = "materials"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    category = Column(String(50))
+    unit = Column(String(20))
+    total_qty = Column(Integer, default=0)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    transactions = relationship("Transaction", back_populates="material")
+
+
+class Company(Base):
+    __tablename__ = "companies"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    contact = Column(String(50))
+    address = Column(String(200))
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    transactions = relationship("Transaction", back_populates="company")
+    settlements = relationship("Settlement", back_populates="company")
+
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+    __table_args__ = (
+        CheckConstraint("type IN ('반입', '반출')", name="chk_type"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    material_id = Column(Integer, ForeignKey("materials.id"))
+    company_id = Column(Integer, ForeignKey("companies.id"))
+    type = Column(String(10), nullable=False)
+    qty = Column(Integer, nullable=False)
+    rental_start_date = Column(Date)
+    rental_due_date = Column(Date)
+    returned_at = Column(TIMESTAMP, nullable=True)
+    note = Column(Text)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    material = relationship("Material", back_populates="transactions")
+    company = relationship("Company", back_populates="transactions")
+    damage_records = relationship("DamageHistory", back_populates="transaction")
+
+
+class Settlement(Base):
+    __tablename__ = "settlements"
+    __table_args__ = (
+        CheckConstraint("status IN ('미정산', '정산완료')", name="chk_status"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    company_id = Column(Integer, ForeignKey("companies.id"))
+    period_start = Column(Date)
+    period_end = Column(Date)
+    amount = Column(DECIMAL(12, 2))
+    status = Column(String(20), default="미정산")
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    company = relationship("Company", back_populates="settlements")
+
+
+class DamageHistory(Base):
+    __tablename__ = "damage_history"
+    __table_args__ = (
+        CheckConstraint("type IN ('분실', '파손')", name="chk_damage_type"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"))
+    type = Column(String(10))
+    description = Column(Text)
+    responsible_party = Column(String(100))
+    resolved = Column(Boolean, default=False)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    transaction = relationship("Transaction", back_populates="damage_records")
+6. schemas.py (Pydantic)
+python
+from pydantic import BaseModel
+from datetime import date, datetime
+from typing import Optional
+
+
+class TransactionCreate(BaseModel):
+    material_id: int
+    company_id: int
+    type: str          # '반입' or '반출'
+    qty: int
+    rental_start_date: Optional[date] = None
+    rental_due_date: Optional[date] = None
+    note: Optional[str] = None
+
+
+class TransactionResponse(TransactionCreate):
+    id: int
+    returned_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True  # SQLAlchemy 객체 → Pydantic 변환 허용
+
+
+class MaterialCreate(BaseModel):
+    name: str
+    category: Optional[str] = None
+    unit: Optional[str] = None
+    total_qty: int = 0
+
+
+class MaterialResponse(MaterialCreate):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+나머지(CompanyCreate, SettlementCreate, DamageCreate 등)도 같은 패턴으로 만들면 됩니다.
+
+7. routers/transactions.py (예시 — 시스템의 시작점)
+python
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from database import get_db
+import models, schemas
+
+router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+
+@router.post("/", response_model=schemas.TransactionResponse)
+def create_transaction(payload: schemas.TransactionCreate, db: Session = Depends(get_db)):
+    if payload.type not in ("반입", "반출"):
+        raise HTTPException(status_code=400, detail="type은 '반입' 또는 '반출'이어야 합니다.")
+
+    tx = models.Transaction(**payload.model_dump())
+    db.add(tx)
+
+    # 반입이면 total_qty 증가
+    material = db.query(models.Material).filter(models.Material.id == payload.material_id).first()
+    if not material:
+        raise HTTPException(status_code=404, detail="자재를 찾을 수 없습니다.")
+
+    if payload.type == "반입":
+        material.total_qty += payload.qty
+
+    db.commit()
+    db.refresh(tx)
+    return tx
+
+
+@router.get("/due-soon", response_model=list[schemas.TransactionResponse])
+def get_due_soon(db: Session = Depends(get_db)):
+    result = db.execute(text("""
+        SELECT * FROM transactions
+        WHERE type = '반출'
+          AND returned_at IS NULL
+          AND rental_due_date <= DATE_ADD(CURDATE(), INTERVAL 3 DAY)
+    """))
+    return result.mappings().all()
+
+
+@router.patch("/{transaction_id}/return")
+def mark_returned(transaction_id: int, db: Session = Depends(get_db)):
+    tx = db.query(models.Transaction).filter(models.Transaction.id == transaction_id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="거래 기록을 찾을 수 없습니다.")
+    if tx.returned_at is not None:
+        raise HTTPException(status_code=400, detail="이미 반납 처리된 건입니다.")
+
+    from datetime import datetime
+    tx.returned_at = datetime.now()
+    db.commit()
+    return {"message": "반납 처리 완료"}
+
+due-soon처럼 뷰(View)나 원시 SQL이 더 편한 조회는 text()로 raw query 실행하면 됩니다.
+
+8. main.py
+python
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from database import engine, Base
+from routers import materials, companies, transactions, settlements, damage
+
+# 개발 초기엔 편의상 자동 테이블 생성 (운영에서는 Alembic 마이그레이션 권장)
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="자재 반입/반출 관리 시스템")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # React 개발 서버
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(materials.router)
+app.include_router(companies.router)
+app.include_router(transactions.router)
+app.include_router(settlements.router)
+app.include_router(damage.router)
+
+
+@app.get("/")
+def root():
+    return {"message": "API 정상 작동 중"}
+
+실행:
+
+bash
+uvicorn main:app --reload
+
+http://localhost:8000/docs에서 Swagger UI로 바로 API 테스트 가능합니다.
+
+9. services/notification.py (반납 알림 스케줄러)
+python
+from apscheduler.schedulers.background import BackgroundScheduler
+from sqlalchemy import text
+from database import SessionLocal
+
+def check_due_returns():
+    db = SessionLocal()
+    try:
+        result = db.execute(text("""
+            SELECT * FROM transactions
+            WHERE type = '반출'
+              AND returned_at IS NULL
+              AND rental_due_date <= DATE_ADD(CURDATE(), INTERVAL 3 DAY)
+        """))
+        due_list = result.mappings().all()
+        for row in due_list:
+            print(f"[알림] 반납 임박: transaction_id={row['id']}, 마감일={row['rental_due_date']}")
+            # 여기서 이메일/슬랙 등 실제 알림 로직 연결
+    finally:
+        db.close()
+
+def start_scheduler():
+    scheduler = BackgroundScheduler(timezone="Asia/Seoul")
+    scheduler.add_job(check_due_returns, "cron", hour=9, minute=0)  # 매일 오전 9시
+    scheduler.start()
+    return scheduler
+
+main.py에서 앱 시작 시 호출:
+
+python
+from services.notification import start_scheduler
+
+@app.on_event("startup")
+def on_startup():
+    start_scheduler()
+다음 단계 제안
+materials.py, companies.py, settlements.py, damage.py 라우터도 transactions.py와 같은 패턴으로 CRUD 작성
+Postman이나 /docs(Swagger)로 API 동작 테스트
+이후 React 프론트에서 axios로 연동
+
+----------------------------
+routers/materials.py
+python
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from database import get_db
+import models, schemas
+
+router = APIRouter(prefix="/materials", tags=["materials"])
+
+
+@router.post("/", response_model=schemas.MaterialResponse)
+def create_material(payload: schemas.MaterialCreate, db: Session = Depends(get_db)):
+    material = models.Material(**payload.model_dump())
+    db.add(material)
+    db.commit()
+    db.refresh(material)
+    return material
+
+
+@router.get("/", response_model=list[schemas.MaterialResponse])
+def get_materials(db: Session = Depends(get_db)):
+    return db.query(models.Material).order_by(models.Material.id).all()
+
+
+@router.get("/{material_id}", response_model=schemas.MaterialResponse)
+def get_material(material_id: int, db: Session = Depends(get_db)):
+    material = db.query(models.Material).filter(models.Material.id == material_id).first()
+    if not material:
+        raise HTTPException(status_code=404, detail="자재를 찾을 수 없습니다.")
+    return material
+
+
+@router.put("/{material_id}", response_model=schemas.MaterialResponse)
+def update_material(material_id: int, payload: schemas.MaterialCreate, db: Session = Depends(get_db)):
+    material = db.query(models.Material).filter(models.Material.id == material_id).first()
+    if not material:
+        raise HTTPException(status_code=404, detail="자재를 찾을 수 없습니다.")
+
+    for key, value in payload.model_dump().items():
+        setattr(material, key, value)
+
+    db.commit()
+    db.refresh(material)
+    return material
+
+
+@router.delete("/{material_id}")
+def delete_material(material_id: int, db: Session = Depends(get_db)):
+    material = db.query(models.Material).filter(models.Material.id == material_id).first()
+    if not material:
+        raise HTTPException(status_code=404, detail="자재를 찾을 수 없습니다.")
+
+    # 거래 이력이 있는 자재는 삭제 막기 (FK 제약으로도 막히지만, 명확한 에러 메시지를 위해)
+    has_transactions = db.query(models.Transaction).filter(
+        models.Transaction.material_id == material_id
+    ).first()
+    if has_transactions:
+        raise HTTPException(status_code=400, detail="거래 이력이 있는 자재는 삭제할 수 없습니다.")
+
+    db.delete(material)
+    db.commit()
+    return {"message": "삭제되었습니다."}
+
+
+@router.get("/{material_id}/inventory")
+def get_material_inventory(material_id: int, db: Session = Depends(get_db)):
+    """개별 자재의 실시간 재고(가용 수량) 조회 — inventory_status 뷰와 동일 로직"""
+    from sqlalchemy import text
+    result = db.execute(
+        text("""
+            SELECT
+                m.id,
+                m.name,
+                m.total_qty,
+                m.total_qty - COALESCE(SUM(
+                    CASE WHEN t.type = '반출' AND t.returned_at IS NULL THEN t.qty ELSE 0 END
+                ), 0) AS available_qty
+            FROM materials m
+            LEFT JOIN transactions t ON m.id = t.material_id
+            WHERE m.id = :material_id
+            GROUP BY m.id, m.name, m.total_qty
+        """),
+        {"material_id": material_id}
+    ).mappings().first()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="자재를 찾을 수 없습니다.")
+    return result
+routers/companies.py
+python
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from database import get_db
+import models, schemas
+
+router = APIRouter(prefix="/companies", tags=["companies"])
+
+
+@router.post("/", response_model=schemas.CompanyResponse)
+def create_company(payload: schemas.CompanyCreate, db: Session = Depends(get_db)):
+    company = models.Company(**payload.model_dump())
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+    return company
+
+
+@router.get("/", response_model=list[schemas.CompanyResponse])
+def get_companies(db: Session = Depends(get_db)):
+    return db.query(models.Company).order_by(models.Company.id).all()
+
+
+@router.get("/{company_id}", response_model=schemas.CompanyResponse)
+def get_company(company_id: int, db: Session = Depends(get_db)):
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="거래처를 찾을 수 없습니다.")
+    return company
+
+
+@router.put("/{company_id}", response_model=schemas.CompanyResponse)
+def update_company(company_id: int, payload: schemas.CompanyCreate, db: Session = Depends(get_db)):
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="거래처를 찾을 수 없습니다.")
+
+    for key, value in payload.model_dump().items():
+        setattr(company, key, value)
+
+    db.commit()
+    db.refresh(company)
+    return company
+
+
+@router.delete("/{company_id}")
+def delete_company(company_id: int, db: Session = Depends(get_db)):
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="거래처를 찾을 수 없습니다.")
+
+    has_transactions = db.query(models.Transaction).filter(
+        models.Transaction.company_id == company_id
+    ).first()
+    if has_transactions:
+        raise HTTPException(status_code=400, detail="거래 이력이 있는 거래처는 삭제할 수 없습니다.")
+
+    db.delete(company)
+    db.commit()
+    return {"message": "삭제되었습니다."}
+
+
+@router.get("/{company_id}/transactions", response_model=list[schemas.TransactionResponse])
+def get_company_transactions(company_id: int, db: Session = Depends(get_db)):
+    """특정 거래처의 전체 반입/반출 이력"""
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="거래처를 찾을 수 없습니다.")
+
+    return db.query(models.Transaction).filter(
+        models.Transaction.company_id == company_id
+    ).order_by(models.Transaction.created_at.desc()).all()
+schemas.py 추가분
+
+앞서 schemas.py에 MaterialCreate/MaterialResponse만 있었으니 CompanyCreate/CompanyResponse를 추가해야 합니다.
+
+python
+class CompanyCreate(BaseModel):
+    name: str
+    contact: Optional[str] = None
+    address: Optional[str] = None
+
+
+class CompanyResponse(CompanyCreate):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+이걸 기존 schemas.py 파일 끝에 추가해주시면 됩니다.
+
+---------------------------------------------------------
+schemas.py 추가분
+python
+class SettlementCreate(BaseModel):
+    company_id: int
+    period_start: date
+    period_end: date
+    amount: float
+    status: Optional[str] = "미정산"
+
+
+class SettlementResponse(SettlementCreate):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class DamageCreate(BaseModel):
+    transaction_id: int
+    type: str          # '분실' or '파손'
+    description: Optional[str] = None
+    responsible_party: Optional[str] = None
+    resolved: bool = False
+
+
+class DamageResponse(DamageCreate):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+routers/settlements.py
+python
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from database import get_db
+import models, schemas
+
+router = APIRouter(prefix="/settlements", tags=["settlements"])
+
+
+@router.post("/", response_model=schemas.SettlementResponse)
+def create_settlement(payload: schemas.SettlementCreate, db: Session = Depends(get_db)):
+    if payload.status not in ("미정산", "정산완료"):
+        raise HTTPException(status_code=400, detail="status는 '미정산' 또는 '정산완료'이어야 합니다.")
+
+    company = db.query(models.Company).filter(models.Company.id == payload.company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="거래처를 찾을 수 없습니다.")
+
+    settlement = models.Settlement(**payload.model_dump())
+    db.add(settlement)
+    db.commit()
+    db.refresh(settlement)
+    return settlement
+
+
+@router.get("/", response_model=list[schemas.SettlementResponse])
+def get_settlements(db: Session = Depends(get_db)):
+    return db.query(models.Settlement).order_by(models.Settlement.id.desc()).all()
+
+
+@router.get("/{settlement_id}", response_model=schemas.SettlementResponse)
+def get_settlement(settlement_id: int, db: Session = Depends(get_db)):
+    settlement = db.query(models.Settlement).filter(models.Settlement.id == settlement_id).first()
+    if not settlement:
+        raise HTTPException(status_code=404, detail="정산 내역을 찾을 수 없습니다.")
+    return settlement
+
+
+@router.get("/company/{company_id}", response_model=list[schemas.SettlementResponse])
+def get_settlements_by_company(company_id: int, db: Session = Depends(get_db)):
+    """특정 거래처의 정산 내역 전체"""
+    company = db.query(models.Company).filter(models.Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="거래처를 찾을 수 없습니다.")
+
+    return db.query(models.Settlement).filter(
+        models.Settlement.company_id == company_id
+    ).order_by(models.Settlement.period_start.desc()).all()
+
+
+@router.patch("/{settlement_id}/complete")
+def mark_settlement_complete(settlement_id: int, db: Session = Depends(get_db)):
+    settlement = db.query(models.Settlement).filter(models.Settlement.id == settlement_id).first()
+    if not settlement:
+        raise HTTPException(status_code=404, detail="정산 내역을 찾을 수 없습니다.")
+    if settlement.status == "정산완료":
+        raise HTTPException(status_code=400, detail="이미 정산 완료된 건입니다.")
+
+    settlement.status = "정산완료"
+    db.commit()
+    return {"message": "정산 완료 처리되었습니다."}
+
+
+@router.get("/company/{company_id}/calculate-period")
+def calculate_period_amount(
+    company_id: int,
+    period_start: str,
+    period_end: str,
+    db: Session = Depends(get_db)
+):
+    """
+    기간 내 해당 거래처의 반출 건수를 기반으로 정산 금액을 미리 계산해보는 용도.
+    실제 단가 정책은 프로젝트 요구사항에 맞게 조정 필요 (여기서는 예시로 qty 합계만 반환).
+    """
+    result = db.execute(
+        text("""
+            SELECT
+                SUM(qty) AS total_qty,
+                COUNT(*) AS transaction_count
+            FROM transactions
+            WHERE company_id = :company_id
+              AND type = '반출'
+              AND created_at BETWEEN :period_start AND :period_end
+        """),
+        {"company_id": company_id, "period_start": period_start, "period_end": period_end}
+    ).mappings().first()
+
+    return result
+
+
+@router.delete("/{settlement_id}")
+def delete_settlement(settlement_id: int, db: Session = Depends(get_db)):
+    settlement = db.query(models.Settlement).filter(models.Settlement.id == settlement_id).first()
+    if not settlement:
+        raise HTTPException(status_code=404, detail="정산 내역을 찾을 수 없습니다.")
+
+    db.delete(settlement)
+    db.commit()
+    return {"message": "삭제되었습니다."}
+routers/damage.py
+python
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from database import get_db
+import models, schemas
+
+router = APIRouter(prefix="/damage-history", tags=["damage"])
+
+
+@router.post("/", response_model=schemas.DamageResponse)
+def create_damage(payload: schemas.DamageCreate, db: Session = Depends(get_db)):
+    if payload.type not in ("분실", "파손"):
+        raise HTTPException(status_code=400, detail="type은 '분실' 또는 '파손'이어야 합니다.")
+
+    transaction = db.query(models.Transaction).filter(
+        models.Transaction.id == payload.transaction_id
+    ).first()
+    if not transaction:
+        raise HTTPException(status_code=404, detail="해당 거래 기록을 찾을 수 없습니다.")
+
+    damage = models.DamageHistory(**payload.model_dump())
+    db.add(damage)
+    db.commit()
+    db.refresh(damage)
+    return damage
+
+
+@router.get("/", response_model=list[schemas.DamageResponse])
+def get_damage_list(resolved: bool | None = None, db: Session = Depends(get_db)):
+    """resolved 쿼리 파라미터로 처리 여부 필터링 가능 (예: ?resolved=false)"""
+    query = db.query(models.DamageHistory)
+    if resolved is not None:
+        query = query.filter(models.DamageHistory.resolved == resolved)
+    return query.order_by(models.DamageHistory.created_at.desc()).all()
+
+
+@router.get("/{damage_id}", response_model=schemas.DamageResponse)
+def get_damage(damage_id: int, db: Session = Depends(get_db)):
+    damage = db.query(models.DamageHistory).filter(models.DamageHistory.id == damage_id).first()
+    if not damage:
+        raise HTTPException(status_code=404, detail="분실/파손 이력을 찾을 수 없습니다.")
+    return damage
+
+
+@router.patch("/{damage_id}/resolve")
+def resolve_damage(damage_id: int, db: Session = Depends(get_db)):
+    damage = db.query(models.DamageHistory).filter(models.DamageHistory.id == damage_id).first()
+    if not damage:
+        raise HTTPException(status_code=404, detail="분실/파손 이력을 찾을 수 없습니다.")
+    if damage.resolved:
+        raise HTTPException(status_code=400, detail="이미 처리 완료된 건입니다.")
+
+    damage.resolved = True
+    db.commit()
+    return {"message": "처리 완료로 변경되었습니다."}
+
+
+@router.delete("/{damage_id}")
+def delete_damage(damage_id: int, db: Session = Depends(get_db)):
+    damage = db.query(models.DamageHistory).filter(models.DamageHistory.id == damage_id).first()
+    if not damage:
+        raise HTTPException(status_code=404, detail="분실/파손 이력을 찾을 수 없습니다.")
+
+    db.delete(damage)
+    db.commit()
+    return {"message": "삭제되었습니다."}
+
+이제 5개 라우터(materials, companies, transactions, settlements, damage)가 모두 완성됐습니다. main.py에서 이미 다 import하고 있으니 바로 실행 가능합니다.
+
+bash
+uvicorn main:app --reload
+
+http://localhost:8000/docs에서 Swagger UI로 각 엔드포인트를 순서대로 테스트해보시면 됩니다 — 보통은 companies → materials → transactions 순으로 데이터를 넣어야 FK 제약에 걸리지 않아요.

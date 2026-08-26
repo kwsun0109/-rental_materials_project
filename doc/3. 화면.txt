@@ -1,0 +1,449 @@
+materials, companies 등록/조회 화면을 만들고, 라우팅과 사이드바에도 반영하겠습니다.
+
+1. src/api/index.js 에 API 추가
+
+기존 파일에 이미 getMaterials, createMaterial, getCompanies, createCompany가 있으니, 조회 화면용으로 몇 개만 더 추가합니다.
+
+javascript
+// Materials
+export const getMaterials = () => client.get("/materials/");
+export const createMaterial = (data) => client.post("/materials/", data);
+export const updateMaterial = (id, data) => client.put(`/materials/${id}`, data);
+export const deleteMaterial = (id) => client.delete(`/materials/${id}`);
+export const getMaterialInventory = (id) => client.get(`/materials/${id}/inventory`);
+
+// Companies
+export const getCompanies = () => client.get("/companies/");
+export const createCompany = (data) => client.post("/companies/", data);
+export const updateCompany = (id, data) => client.put(`/companies/${id}`, data);
+export const deleteCompany = (id) => client.delete(`/companies/${id}`);
+2. src/pages/Materials.jsx
+jsx
+import { useState, useEffect } from "react";
+import {
+  Box, Typography, TextField, Button, Stack, Alert, IconButton,
+} from "@mui/material";
+import DeleteIcon from "@mui/icons-material/Delete";
+import Table from "../components/Table";
+import { getMaterials, createMaterial, deleteMaterial } from "../api";
+
+const initialForm = { name: "", category: "", unit: "", total_qty: 0 };
+
+function Materials() {
+  const [materials, setMaterials] = useState([]);
+  const [form, setForm] = useState(initialForm);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const load = () => {
+    getMaterials().then((res) => setMaterials(res.data));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleChange = (field) => (e) => {
+    setForm({ ...form, [field]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    try {
+      await createMaterial({
+        ...form,
+        total_qty: Number(form.total_qty) || 0,
+      });
+      setSuccess("자재가 등록되었습니다.");
+      setForm(initialForm);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("정말 삭제하시겠습니까?")) return;
+    try {
+      await deleteMaterial(id);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const columns = [
+    { key: "id", label: "ID" },
+    { key: "name", label: "자재명" },
+    { key: "category", label: "분류" },
+    { key: "unit", label: "단위" },
+    { key: "total_qty", label: "총 보유 수량" },
+    {
+      key: "action",
+      label: "삭제",
+      render: (row) => (
+        <IconButton size="small" color="error" onClick={() => handleDelete(row.id)}>
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      ),
+    },
+  ];
+
+  return (
+    <Box>
+      <Typography variant="h5" gutterBottom>자재 관리</Typography>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+
+      <Box component="form" onSubmit={handleSubmit} sx={{ mb: 4, maxWidth: 480 }}>
+        <Stack spacing={2}>
+          <TextField
+            label="자재명" value={form.name}
+            onChange={handleChange("name")} required
+          />
+          <TextField
+            label="분류" value={form.category}
+            onChange={handleChange("category")}
+            placeholder="예: 중장비, 공구 등"
+          />
+          <TextField
+            label="단위" value={form.unit}
+            onChange={handleChange("unit")}
+            placeholder="예: 개, 대, kg"
+          />
+          <TextField
+            label="초기 보유 수량" type="number" value={form.total_qty}
+            onChange={handleChange("total_qty")}
+          />
+          <Button type="submit" variant="contained">등록</Button>
+        </Stack>
+      </Box>
+
+      <Typography variant="h6" gutterBottom>등록된 자재 목록</Typography>
+      <Table columns={columns} rows={materials} />
+    </Box>
+  );
+}
+
+export default Materials;
+3. src/pages/Companies.jsx
+jsx
+import { useState, useEffect } from "react";
+import {
+  Box, Typography, TextField, Button, Stack, Alert, IconButton,
+} from "@mui/material";
+import DeleteIcon from "@mui/icons-material/Delete";
+import Table from "../components/Table";
+import { getCompanies, createCompany, deleteCompany } from "../api";
+
+const initialForm = { name: "", contact: "", address: "" };
+
+function Companies() {
+  const [companies, setCompanies] = useState([]);
+  const [form, setForm] = useState(initialForm);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const load = () => {
+    getCompanies().then((res) => setCompanies(res.data));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleChange = (field) => (e) => {
+    setForm({ ...form, [field]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    try {
+      await createCompany(form);
+      setSuccess("거래처가 등록되었습니다.");
+      setForm(initialForm);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("정말 삭제하시겠습니까?")) return;
+    try {
+      await deleteCompany(id);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const columns = [
+    { key: "id", label: "ID" },
+    { key: "name", label: "거래처명" },
+    { key: "contact", label: "연락처" },
+    { key: "address", label: "주소" },
+    {
+      key: "action",
+      label: "삭제",
+      render: (row) => (
+        <IconButton size="small" color="error" onClick={() => handleDelete(row.id)}>
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      ),
+    },
+  ];
+
+  return (
+    <Box>
+      <Typography variant="h5" gutterBottom>거래처 관리</Typography>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+
+      <Box component="form" onSubmit={handleSubmit} sx={{ mb: 4, maxWidth: 480 }}>
+        <Stack spacing={2}>
+          <TextField
+            label="거래처명" value={form.name}
+            onChange={handleChange("name")} required
+          />
+          <TextField
+            label="연락처" value={form.contact}
+            onChange={handleChange("contact")}
+          />
+          <TextField
+            label="주소" value={form.address}
+            onChange={handleChange("address")}
+          />
+          <Button type="submit" variant="contained">등록</Button>
+        </Stack>
+      </Box>
+
+      <Typography variant="h6" gutterBottom>등록된 거래처 목록</Typography>
+      <Table columns={columns} rows={companies} />
+    </Box>
+  );
+}
+
+export default Companies;
+4. src/App.jsx 라우트 추가
+jsx
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Box, CssBaseline } from "@mui/material";
+import Sidebar from "./components/Sidebar";
+import Materials from "./pages/Materials";
+import Companies from "./pages/Companies";
+import TransactionForm from "./pages/TransactionForm";
+import InventoryStatus from "./pages/InventoryStatus";
+import ReturnAlerts from "./pages/ReturnAlerts";
+import Settlements from "./pages/Settlements";
+import DamageHistory from "./pages/DamageHistory";
+
+function App() {
+  return (
+    <BrowserRouter>
+      <CssBaseline />
+      <Box sx={{ display: "flex" }}>
+        <Sidebar />
+        <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+          <Routes>
+            <Route path="/" element={<TransactionForm />} />
+            <Route path="/materials" element={<Materials />} />
+            <Route path="/companies" element={<Companies />} />
+            <Route path="/inventory" element={<InventoryStatus />} />
+            <Route path="/alerts" element={<ReturnAlerts />} />
+            <Route path="/settlements" element={<Settlements />} />
+            <Route path="/damage" element={<DamageHistory />} />
+          </Routes>
+        </Box>
+      </Box>
+    </BrowserRouter>
+  );
+}
+
+export default App;
+5. src/components/Sidebar.jsx 메뉴 추가
+jsx
+const menuItems = [
+  { label: "자재 관리", path: "/materials" },
+  { label: "거래처 관리", path: "/companies" },
+  { label: "반입/반출 등록", path: "/" },
+  { label: "재고 현황", path: "/inventory" },
+  { label: "반납 알림", path: "/alerts" },
+  { label: "정산 관리", path: "/settlements" },
+  { label: "분실/파손 이력", path: "/damage" },
+];
+
+materials, companies를 맨 위로 올린 이유는 — 실제 사용 흐름상 자재와 거래처를 먼저 등록해야 반입/반출 등록 화면의 드롭다운(select)에 데이터가 나타나기 때문입니다.
+
+이제 전체 화면 구성이 끝났습니다. 사용 순서는 이렇습니다:
+
+자재 관리 → 자재 등록 (예: 굴삭기, 안전모)
+거래처 관리 → 거래처 등록 (예: OO건설)
+반입/반출 등록 → 위에서 등록한 자재/거래처로 실제 거래 기록
+이후 재고 현황 / 반납 알림 / 정산 / 분실파손 화면에서 결과 확인
+
+지금 상태로 npm run dev + uvicorn main:app --reload 둘 다 켜서 전체 흐름을 테스트해보시겠어요? 아니면 배포(빌드) 쪽도 궁금하신가요?
+
+
+
+======================== 기존 파일에 추가 수정 하면됩니다. ============================================================
+전체 배경을 보랏빛으로 바꿔드릴게요. MUI 테마 시스템을 활용해서 일관되게 적용하겠습니다.
+
+1. src/theme.js (새 파일 생성)
+javascript
+import { createTheme } from "@mui/material/styles";
+
+const theme = createTheme({
+  palette: {
+    background: {
+      default: "#f3ecfa",  // 전체 배경 (연보라)
+      paper: "#ffffff",    // 카드/테이블 등은 흰색 유지 (가독성)
+    },
+    primary: {
+      main: "#7e57c2",     // 버튼, 강조 요소 (보라)
+    },
+  },
+});
+
+export default theme;
+
+#f3ecfa는 은은한 연보라입니다. 더 진하게 하고 싶으시면 
+#e8d5f5나 
+#ede7f6(MUI deep purple 50번대)로 바꿔보세요.
+
+2. src/main.jsx 에 ThemeProvider 적용
+jsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { ThemeProvider, CssBaseline } from "@mui/material";
+import App from "./App.jsx";
+import theme from "./theme";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <App />
+    </ThemeProvider>
+  </React.StrictMode>
+);
+
+CssBaseline이 theme.palette.background.default를 자동으로 <body>에 적용해줍니다.
+
+3. src/App.jsx 에서 중복된 CssBaseline 제거
+
+main.jsx에서 이미 적용했으니 App.jsx에 있던 걸 제거합니다.
+
+jsx
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Box } from "@mui/material";
+import Sidebar from "./components/Sidebar";
+import Materials from "./pages/Materials";
+import Companies from "./pages/Companies";
+import TransactionForm from "./pages/TransactionForm";
+import InventoryStatus from "./pages/InventoryStatus";
+import ReturnAlerts from "./pages/ReturnAlerts";
+import Settlements from "./pages/Settlements";
+import DamageHistory from "./pages/DamageHistory";
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Box sx={{ display: "flex" }}>
+        <Sidebar />
+        <Box component="main" sx={{ flexGrow: 1, p: 3, minHeight: "100vh" }}>
+          <Routes>
+            <Route path="/" element={<TransactionForm />} />
+            <Route path="/materials" element={<Materials />} />
+            <Route path="/companies" element={<Companies />} />
+            <Route path="/inventory" element={<InventoryStatus />} />
+            <Route path="/alerts" element={<ReturnAlerts />} />
+            <Route path="/settlements" element={<Settlements />} />
+            <Route path="/damage" element={<DamageHistory />} />
+          </Routes>
+        </Box>
+      </Box>
+    </BrowserRouter>
+  );
+}
+
+export default App;
+4. (선택) Sidebar도 보라 톤으로 맞추기
+
+배경만 바꾸면 사이드바(흰색)와 톤이 안 맞을 수 있어서, 사이드바도 살짝 진한 보라로 맞춰드립니다.
+
+jsx
+// src/components/Sidebar.jsx
+<Drawer
+  variant="permanent"
+  sx={{
+    width: 220,
+    flexShrink: 0,
+    [`& .MuiDrawer-paper`]: {
+      width: 220,
+      boxSizing: "border-box",
+      backgroundColor: "#5e35b1",  // 진보라
+      color: "#ffffff",
+    },
+  }}
+>
+  <Toolbar>
+    <Typography variant="h6" noWrap sx={{ color: "#ffffff" }}>
+      자재 관리 시스템
+    </Typography>
+  </Toolbar>
+  <List>
+    {menuItems.map((item) => (
+      <ListItemButton
+        key={item.path}
+        component={Link}
+        to={item.path}
+        selected={location.pathname === item.path}
+        sx={{
+          color: "#ffffff",
+          "&.Mui-selected": {
+            backgroundColor: "rgba(255,255,255,0.15)",
+          },
+          "&:hover": {
+            backgroundColor: "rgba(255,255,255,0.1)",
+          },
+        }}
+      >
+        <ListItemText primary={item.label} />
+      </ListItemButton>
+    ))}
+  </List>
+</Drawer>
+
+이렇게 하면:
+
+전체 배경: 연보라 (
+#f3ecfa)
+사이드바: 진보라 (
+#5e35b1)
+버튼/강조 요소: 보라 (
+#7e57c2)
+테이블/카드: 흰색 유지 (가독성 확보)
+==============================================
+추가 수정요령
+
+파일별로 정확히 뭘 해야 하는지 표로 정리하면:
+
+파일	작업	내용
+src/theme.js	신규 생성	이 파일 자체가 없었으니 새로 만드는 파일입니다
+src/main.jsx	기존 코드 수정	ThemeProvider, theme import 추가하고, 기존 렌더링 구조를 감싸는 형태로 변경
+src/App.jsx	기존 코드 수정	기존에 있던 CssBaseline import와 사용 부분만 제거 (나머지 라우트 코드는 그대로 유지)
+src/components/Sidebar.jsx	기존 코드 수정	Drawer의 sx 속성과 ListItemButton의 스타일 부분만 수정 (메뉴 항목, 라우팅 로직은 그대로)
+요약하면
+theme.js → 새 파일 만드세요 (src/theme.js 경로에)
+main.jsx, App.jsx, Sidebar.jsx → 이미 갖고 계신 기존 파일을 열어서, 제가 드린 코드로 덮어쓰기(전체 교체) 하시면 됩니다. 
+각 파일에서 바뀐 부분은 이렇습니다:
+
+main.jsx: ThemeProvider로 감싸는 구조 추가
+App.jsx: CssBaseline 제거 (한 줄)
+Sidebar.jsx: 색상 스타일(sx) 부분만 추가
+
+즉, 지금까지 만든 Materials.jsx, Companies.jsx, TransactionForm.jsx 등 다른 페이지 파일들은 전혀 손댈 필요 없습니다.
+ 저 3개 파일(theme.js 신규, main.jsx/App.jsx/Sidebar.jsx 수정)만 반영하시면 전체 화면 배경이 보라빛으로 바뀝니다.

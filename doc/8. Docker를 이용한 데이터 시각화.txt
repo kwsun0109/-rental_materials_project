@@ -1,0 +1,62 @@
+이런 용도에 Docker가 잘 맞아요. 개념적으로 정리해드릴게요 (지금 당장 만들 필요는 없고, 나중에 데이터 쌓였을 때 참고하시면 됩니다).
+
+전체 그림
+[MySQL] ← 지금 쌓이는 원본 데이터 (거래, 재고, 정산 등)
+   ↓
+[분석용 도구들] ← Docker로 추가
+   ├─ 데이터 탐색/분석: Jupyter Notebook
+   ├─ 시각화 대시보드: Metabase / Superset
+   └─ 모델링(예측 등): Python (pandas, scikit-learn)
+
+지금 만드신 서비스(MySQL+FastAPI+React)는 "운영용"이고, 여기에 "분석용" 도구를 별도 컨테이너로 얹는 방식입니다. 원본 DB는 그대로 두고, 분석 도구들이 그 DB를 읽어서 보여주는 구조예요.
+
+용도별로 뭘 쓰면 되는지
+
+1. 데이터 탐색/분석 → Jupyter Notebook
+
+코드로 자유롭게 데이터 파고들 때 (예: "지난 6개월 반출 패턴이 어땠지?")
+pandas로 MySQL에서 데이터 끌어와서 분석
+
+2. 시각화 대시보드 → Metabase (추천) 또는 Superset
+
+MySQL에 연결만 하면 SQL 몰라도 클릭으로 차트/대시보드 생성 가능
+"이번 달 자재별 반출 현황", "거래처별 정산 금액" 같은 걸 그래프로 자동 갱신
+개인용 규모엔 Metabase가 설치/운영이 훨씬 간편합니다
+
+3. 모델링(예측 등) → Python 스크립트/Jupyter
+
+예: "반납 지연 자재를 미리 예측", "재고 소진 시점 예측" 같은 걸 하고 싶으시면 scikit-learn 등으로 별도 작업
+이건 데이터가 충분히 쌓인 다음(최소 몇 달 치) 의미가 생기는 영역입니다
+Docker Compose로 묶으면
+
+나중엔 이런 식으로 docker-compose.yml 하나로 전체를 관리하게 됩니다.
+
+yaml
+services:
+  mysql:
+    image: mysql:8.0
+    ...
+  backend:
+    build: ./backend
+    ...
+  frontend:
+    build: ./frontend
+    ...
+  metabase:
+    image: metabase/metabase
+    ports:
+      - "3000:3000"
+  jupyter:
+    image: jupyter/scipy-notebook
+    ports:
+      - "8888:8888"
+
+docker-compose up 한 번이면 운영 서비스 + 분석 도구까지 전부 한 번에 켜지는 구조가 됩니다.
+
+지금 시점 정리
+
+말씀하신 것처럼 지금은 개발도 안 끝난 단계라, 이 얘기는 정말 나중 일입니다. 순서상:
+
+지금: MySQL + FastAPI + React 개발 완료, 실제로 데이터 쌓기 시작
+데이터가 어느 정도 쌓이면(최소 몇 주~몇 달): Metabase 붙여서 시각화부터 시작 (제일 쉽고 효과 빠름)
+더 나중에, 필요하면: Jupyter로 심화 분석, 예측 모델링까지 확장

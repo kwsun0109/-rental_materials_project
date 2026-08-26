@@ -1,0 +1,553 @@
+좋습니다. React 프론트엔드를 구성해드릴게요. 상태 관리는 가볍게 useState + useEffect, HTTP 통신은 axios를 사용합니다.
+
+프로젝트 생성 및 설치
+bash
+npm create vite@latest frontend -- --template react
+cd frontend
+npm install axios react-router-dom
+npm install @mui/material @emotion/react @emotion/styled @mui/icons-material
+
+Vite 기반으로 빠르게 구성했습니다. UI는 MUI(Material UI)를 사용해 테이블 컴포넌트를 편하게 씁니다.
+
+1. src/api/client.js
+javascript
+import axios from "axios";
+
+const client = axios.create({
+  baseURL: "http://localhost:8000",
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// 에러 응답 공통 처리
+client.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const message = error.response?.data?.detail || "서버 오류가 발생했습니다.";
+    console.error("API Error:", message);
+    return Promise.reject(new Error(message));
+  }
+);
+
+export default client;
+2. src/api/index.js (엔드포인트 모음)
+javascript
+import client from "./client";
+
+// Materials
+export const getMaterials = () => client.get("/materials/");
+export const createMaterial = (data) => client.post("/materials/", data);
+export const getMaterialInventory = (id) => client.get(`/materials/${id}/inventory`);
+export const deleteMaterial = (id) => client.delete(`/materials/${id}`);
+
+// Companies
+export const getCompanies = () => client.get("/companies/");
+export const createCompany = (data) => client.post("/companies/", data);
+export const deleteCompany = (id) => client.delete(`/companies/${id}`);
+
+// Transactions
+export const getDueSoon = () => client.get("/transactions/due-soon");
+export const createTransaction = (data) => client.post("/transactions/", data);
+export const markReturned = (id) => client.patch(`/transactions/${id}/return`);
+
+// Settlements
+export const getSettlements = () => client.get("/settlements/");
+export const createSettlement = (data) => client.post("/settlements/", data);
+export const markSettlementComplete = (id) => client.patch(`/settlements/${id}/complete`);
+
+// Damage history
+export const getDamageList = (resolved) =>
+  client.get("/damage-history/", { params: resolved !== undefined ? { resolved } : {} });
+export const createDamage = (data) => client.post("/damage-history/", data);
+export const resolveDamage = (id) => client.patch(`/damage-history/${id}/resolve`);
+3. src/App.jsx (라우팅)
+jsx
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Box, CssBaseline } from "@mui/material";
+import Sidebar from "./components/Sidebar";
+import TransactionForm from "./pages/TransactionForm";
+import InventoryStatus from "./pages/InventoryStatus";
+import ReturnAlerts from "./pages/ReturnAlerts";
+import Settlements from "./pages/Settlements";
+import DamageHistory from "./pages/DamageHistory";
+
+function App() {
+  return (
+    <BrowserRouter>
+      <CssBaseline />
+      <Box sx={{ display: "flex" }}>
+        <Sidebar />
+        <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+          <Routes>
+            <Route path="/" element={<TransactionForm />} />
+            <Route path="/inventory" element={<InventoryStatus />} />
+            <Route path="/alerts" element={<ReturnAlerts />} />
+            <Route path="/settlements" element={<Settlements />} />
+            <Route path="/damage" element={<DamageHistory />} />
+          </Routes>
+        </Box>
+      </Box>
+    </BrowserRouter>
+  );
+}
+
+export default App;
+4. src/components/Sidebar.jsx
+jsx
+import { Drawer, List, ListItemButton, ListItemText, Toolbar, Typography } from "@mui/material";
+import { Link, useLocation } from "react-router-dom";
+
+const menuItems = [
+  { label: "반입/반출 등록", path: "/" },
+  { label: "재고 현황", path: "/inventory" },
+  { label: "반납 알림", path: "/alerts" },
+  { label: "정산 관리", path: "/settlements" },
+  { label: "분실/파손 이력", path: "/damage" },
+];
+
+function Sidebar() {
+  const location = useLocation();
+
+  return (
+    <Drawer
+      variant="permanent"
+      sx={{
+        width: 220,
+        flexShrink: 0,
+        [`& .MuiDrawer-paper`]: { width: 220, boxSizing: "border-box" },
+      }}
+    >
+      <Toolbar>
+        <Typography variant="h6" noWrap>
+          자재 관리 시스템
+        </Typography>
+      </Toolbar>
+      <List>
+        {menuItems.map((item) => (
+          <ListItemButton
+            key={item.path}
+            component={Link}
+            to={item.path}
+            selected={location.pathname === item.path}
+          >
+            <ListItemText primary={item.label} />
+          </ListItemButton>
+        ))}
+      </List>
+    </Drawer>
+  );
+}
+
+export default Sidebar;
+5. src/components/Table.jsx (재사용 테이블)
+jsx
+import {
+  Table as MuiTable,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+} from "@mui/material";
+
+/**
+ * columns: [{ key: 'name', label: '이름' }, { key: 'qty', label: '수량', render: (row) => ... }]
+ * rows: 데이터 배열
+ */
+function Table({ columns, rows }) {
+  return (
+    <TableContainer component={Paper}>
+      <MuiTable size="small">
+        <TableHead>
+          <TableRow>
+            {columns.map((col) => (
+              <TableCell key={col.key}>{col.label}</TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={columns.length} align="center">
+                데이터가 없습니다.
+              </TableCell>
+            </TableRow>
+          ) : (
+            rows.map((row, idx) => (
+              <TableRow key={row.id ?? idx}>
+                {columns.map((col) => (
+                  <TableCell key={col.key}>
+                    {col.render ? col.render(row) : row[col.key]}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </MuiTable>
+    </TableContainer>
+  );
+}
+
+export default Table;
+6. src/pages/TransactionForm.jsx (핵심 기능)
+jsx
+import { useState, useEffect } from "react";
+import {
+  Box, Typography, TextField, MenuItem, Button, Stack, Alert,
+} from "@mui/material";
+import { getMaterials, getCompanies, createTransaction } from "../api";
+
+function TransactionForm() {
+  const [materials, setMaterials] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [form, setForm] = useState({
+    material_id: "",
+    company_id: "",
+    type: "반입",
+    qty: "",
+    rental_start_date: "",
+    rental_due_date: "",
+    note: "",
+  });
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    getMaterials().then((res) => setMaterials(res.data));
+    getCompanies().then((res) => setCompanies(res.data));
+  }, []);
+
+  const handleChange = (field) => (e) => {
+    setForm({ ...form, [field]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    try {
+      await createTransaction({
+        ...form,
+        material_id: Number(form.material_id),
+        company_id: Number(form.company_id),
+        qty: Number(form.qty),
+        rental_start_date: form.rental_start_date || null,
+        rental_due_date: form.rental_due_date || null,
+      });
+      setSuccess("등록되었습니다.");
+      setForm({ ...form, qty: "", note: "" });
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <Box maxWidth={480}>
+      <Typography variant="h5" gutterBottom>
+        반입/반출 등록
+      </Typography>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+
+      <form onSubmit={handleSubmit}>
+        <Stack spacing={2}>
+          <TextField
+            select label="자재" value={form.material_id}
+            onChange={handleChange("material_id")} required
+          >
+            {materials.map((m) => (
+              <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select label="거래처" value={form.company_id}
+            onChange={handleChange("company_id")} required
+          >
+            {companies.map((c) => (
+              <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+            ))}
+          </TextField>
+
+          <TextField
+            select label="구분" value={form.type}
+            onChange={handleChange("type")} required
+          >
+            <MenuItem value="반입">반입</MenuItem>
+            <MenuItem value="반출">반출</MenuItem>
+          </TextField>
+
+          <TextField
+            label="수량" type="number" value={form.qty}
+            onChange={handleChange("qty")} required
+          />
+
+          {form.type === "반출" && (
+            <>
+              <TextField
+                label="임대 시작일" type="date" value={form.rental_start_date}
+                onChange={handleChange("rental_start_date")}
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="반납 예정일" type="date" value={form.rental_due_date}
+                onChange={handleChange("rental_due_date")}
+                InputLabelProps={{ shrink: true }}
+              />
+            </>
+          )}
+
+          <TextField
+            label="비고" multiline rows={2} value={form.note}
+            onChange={handleChange("note")}
+          />
+
+          <Button type="submit" variant="contained">등록</Button>
+        </Stack>
+      </form>
+    </Box>
+  );
+}
+
+export default TransactionForm;
+7. src/pages/InventoryStatus.jsx
+jsx
+import { useState, useEffect } from "react";
+import { Box, Typography } from "@mui/material";
+import Table from "../components/Table";
+import { getMaterials, getMaterialInventory } from "../api";
+
+function InventoryStatus() {
+  const [rows, setRows] = useState([]);
+
+  useEffect(() => {
+    const load = async () => {
+      const { data: materials } = await getMaterials();
+      const results = await Promise.all(
+        materials.map((m) => getMaterialInventory(m.id).then((res) => res.data))
+      );
+      setRows(results);
+    };
+    load();
+  }, []);
+
+  const columns = [
+    { key: "name", label: "자재명" },
+    { key: "total_qty", label: "총 보유 수량" },
+    { key: "available_qty", label: "가용 수량" },
+  ];
+
+  return (
+    <Box>
+      <Typography variant="h5" gutterBottom>재고 현황</Typography>
+      <Table columns={columns} rows={rows} />
+    </Box>
+  );
+}
+
+export default InventoryStatus;
+8. src/pages/ReturnAlerts.jsx
+jsx
+import { useState, useEffect } from "react";
+import { Box, Typography, Button, Chip } from "@mui/material";
+import Table from "../components/Table";
+import { getDueSoon, markReturned } from "../api";
+
+function ReturnAlerts() {
+  const [rows, setRows] = useState([]);
+
+  const load = () => {
+    getDueSoon().then((res) => setRows(res.data));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleReturn = async (id) => {
+    await markReturned(id);
+    load();
+  };
+
+  const columns = [
+    { key: "id", label: "ID" },
+    { key: "material_id", label: "자재 ID" },
+    { key: "company_id", label: "거래처 ID" },
+    { key: "qty", label: "수량" },
+    { key: "rental_due_date", label: "반납 예정일" },
+    {
+      key: "status",
+      label: "상태",
+      render: () => <Chip label="반납 임박" color="warning" size="small" />,
+    },
+    {
+      key: "action",
+      label: "처리",
+      render: (row) => (
+        <Button size="small" variant="outlined" onClick={() => handleReturn(row.id)}>
+          반납 처리
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <Box>
+      <Typography variant="h5" gutterBottom>반납 알림 (3일 이내)</Typography>
+      <Table columns={columns} rows={rows} />
+    </Box>
+  );
+}
+
+export default ReturnAlerts;
+9. src/pages/Settlements.jsx
+jsx
+import { useState, useEffect } from "react";
+import { Box, Typography, Button, Chip } from "@mui/material";
+import Table from "../components/Table";
+import { getSettlements, markSettlementComplete } from "../api";
+
+function Settlements() {
+  const [rows, setRows] = useState([]);
+
+  const load = () => {
+    getSettlements().then((res) => setRows(res.data));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleComplete = async (id) => {
+    await markSettlementComplete(id);
+    load();
+  };
+
+  const columns = [
+    { key: "id", label: "ID" },
+    { key: "company_id", label: "거래처 ID" },
+    { key: "period_start", label: "시작일" },
+    { key: "period_end", label: "종료일" },
+    { key: "amount", label: "금액" },
+    {
+      key: "status",
+      label: "상태",
+      render: (row) => (
+        <Chip
+          label={row.status}
+          color={row.status === "정산완료" ? "success" : "default"}
+          size="small"
+        />
+      ),
+    },
+    {
+      key: "action",
+      label: "처리",
+      render: (row) =>
+        row.status !== "정산완료" && (
+          <Button size="small" variant="outlined" onClick={() => handleComplete(row.id)}>
+            정산 완료
+          </Button>
+        ),
+    },
+  ];
+
+  return (
+    <Box>
+      <Typography variant="h5" gutterBottom>정산 관리</Typography>
+      <Table columns={columns} rows={rows} />
+    </Box>
+  );
+}
+
+export default Settlements;
+10. src/pages/DamageHistory.jsx
+jsx
+import { useState, useEffect } from "react";
+import { Box, Typography, Button, Chip } from "@mui/material";
+import Table from "../components/Table";
+import { getDamageList, resolveDamage } from "../api";
+
+function DamageHistory() {
+  const [rows, setRows] = useState([]);
+
+  const load = () => {
+    getDamageList().then((res) => setRows(res.data));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleResolve = async (id) => {
+    await resolveDamage(id);
+    load();
+  };
+
+  const columns = [
+    { key: "id", label: "ID" },
+    { key: "transaction_id", label: "거래 ID" },
+    { key: "type", label: "구분" },
+    { key: "description", label: "설명" },
+    { key: "responsible_party", label: "책임 소재" },
+    {
+      key: "resolved",
+      label: "처리 여부",
+      render: (row) => (
+        <Chip
+          label={row.resolved ? "처리완료" : "미처리"}
+          color={row.resolved ? "success" : "warning"}
+          size="small"
+        />
+      ),
+    },
+    {
+      key: "action",
+      label: "처리",
+      render: (row) =>
+        !row.resolved && (
+          <Button size="small" variant="outlined" onClick={() => handleResolve(row.id)}>
+            처리 완료
+          </Button>
+        ),
+    },
+  ];
+
+  return (
+    <Box>
+      <Typography variant="h5" gutterBottom>분실/파손 이력</Typography>
+      <Table columns={columns} rows={rows} />
+    </Box>
+  );
+}
+
+export default DamageHistory;
+11. src/main.jsx (진입점 확인)
+
+Vite 기본 템플릿에 있는 main.jsx는 그대로 두시면 됩니다:
+
+jsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App.jsx";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+실행
+bash
+npm run dev
+
+기본적으로 http://localhost:5173에서 실행됩니다. FastAPI(main.py)의 CORS 설정이 localhost:3000으로 되어 있는데, Vite는 기본 포트가 3000이 아니라 5173이니 백엔드 CORS 설정을 수정해야 합니다.
+
+python
+# main.py
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Vite 기본 포트로 변경
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+이제 전체 흐름(MySQL → FastAPI → React)이 다 연결됐습니다.

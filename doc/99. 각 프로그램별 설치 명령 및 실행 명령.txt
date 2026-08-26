@@ -1,0 +1,55 @@
+1. React (프론트엔드)
+프로젝트 생성
+npm create vite@latest my-react-app -- --template react
+
+폴더 이동
+cd my-react-app
+
+패키지 설치
+npm install
+
+개발 서버 실행
+npm run dev
+
+2. Node.js + Express (백엔드)
+폴더 생성 및 이동
+mkdir my-node-app && cd my-node-app
+
+프로젝트 초기화
+npm init -y
+
+패키지 설치
+npm install express cors dotenv
+
+개발 서버 실행
+npx nodemon server.js
+
+3. FastAPI (Python 백엔드)
+가상환경 생성
+python -m venv venv
+
+가상환경 활성화
+
+Windows: venv\Scripts\activate
+
+macOS/Linux: source venv/bin/activate
+
+패키지 설치
+pip install fastapi uvicorn
+
+개발 서버 실행
+uvicorn main:app --reload
+
+====================================
+# 1. 프로젝트 생성 (원하는 폴더 이름으로)
+npm create vite@latest my-footprint -- --template react
+
+# 2. 해당 폴더로 이동
+cd my-footprint
+
+# 3. 필요한 라이브러리 설치 (react-leaflet과 leaflet 필수)
+npm install
+npm install react-leaflet leaflet
+
+# 4. App.jsx 파일에 위 코드를 붙여넣고 실행
+npm run dev
