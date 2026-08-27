@@ -2,20 +2,25 @@ import { useState, useEffect } from "react";
 import {
   Box, Typography, TextField, MenuItem, Button, Stack, Alert,
   Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Paper,
+  Autocomplete,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import {
   getMaterials, getCompanies, createTransaction,
   getTransactions, updateTransaction, deleteTransaction,
+  // ⚠️ 아래 두 함수가 api.js에 없다면 추가로 만들어야 합니다.
+  // 예: export const createMaterial = (payload) => axios.post("/materials", payload);
+  //     export const createCompany  = (payload) => axios.post("/companies", payload);
+  createMaterial, createCompany,
 } from "../api";
 import PageContainer from "../components/PageContainer";
 import PageHeader from "../components/PageHeader";
 import Table from "../components/Table";
 
 const emptyForm = {
-  material_id: "",
-  company_id: "",
+  material_name: "",
+  company_name: "",
   type: "반입",
   qty: "",
   rental_start_date: "",
@@ -64,6 +69,29 @@ function TransactionForm() {
     return found ? found.name : companyId;
   };
 
+  // 이름으로 기존 자재를 찾고, 없으면 새로 생성해서 id를 반환
+  const resolveMaterialId = async (name) => {
+    const trimmed = (name || "").trim();
+    if (!trimmed) throw new Error("자재를 입력해주세요.");
+    const existing = materials.find(
+      (m) => m.name.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (existing) return existing.id;
+    const res = await createMaterial({ name: trimmed });
+    return res.data.id;
+  };
+
+  const resolveCompanyId = async (name) => {
+    const trimmed = (name || "").trim();
+    if (!trimmed) throw new Error("거래처를 입력해주세요.");
+    const existing = companies.find(
+      (c) => c.name.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (existing) return existing.id;
+    const res = await createCompany({ name: trimmed });
+    return res.data.id;
+  };
+
   const handleChange = (field) => (e) => {
     setForm({ ...form, [field]: e.target.value });
   };
@@ -73,13 +101,17 @@ function TransactionForm() {
     setError("");
     setSuccess("");
     try {
+      const material_id = await resolveMaterialId(form.material_name);
+      const company_id = await resolveCompanyId(form.company_name);
+
       await createTransaction({
-        ...form,
-        material_id: Number(form.material_id),
-        company_id: Number(form.company_id),
+        material_id,
+        company_id,
+        type: form.type,
         qty: Number(form.qty),
         rental_start_date: form.rental_start_date || null,
         rental_due_date: form.rental_due_date || null,
+        note: form.note,
       });
       setSuccess("등록되었습니다.");
       setForm(emptyForm);
@@ -92,8 +124,8 @@ function TransactionForm() {
   const openEdit = (row) => {
     setEditForm({
       id: row.id,
-      material_id: row.material_id,
-      company_id: row.company_id,
+      material_name: materialName(row.material_id),
+      company_name: companyName(row.company_id),
       type: row.type,
       qty: row.qty,
       rental_start_date: row.rental_start_date ?? "",
@@ -116,9 +148,12 @@ function TransactionForm() {
   const handleEditSave = async () => {
     setEditError("");
     try {
+      const material_id = await resolveMaterialId(editForm.material_name);
+      const company_id = await resolveCompanyId(editForm.company_name);
+
       await updateTransaction(editForm.id, {
-        material_id: Number(editForm.material_id),
-        company_id: Number(editForm.company_id),
+        material_id,
+        company_id,
         type: editForm.type,
         qty: Number(editForm.qty),
         rental_start_date: editForm.rental_start_date || null,
@@ -142,17 +177,13 @@ function TransactionForm() {
     }
   };
 
-  // 💡 드롭다운 목록이 딱 10개 정도 높이까지만 보이고 스크롤바가 생기도록 설정하는 스타일
-  const menuPropsStyle = {
-    MenuProps: {
-      PaperProps: {
-        style: {
-          maxHeight: "360px", // 높이 제한 (항목 약 10개 분량)
-          border: "1px solid #e5e4e7",
-          boxShadow: "0px 4px 20px rgba(0,0,0,0.1)",
-          borderRadius: "8px",
-        },
-      },
+  // 검색창(Autocomplete) 드롭다운 목록 스타일 - 최대 높이 제한 + 스크롤
+  const listboxStyle = {
+    style: {
+      maxHeight: "360px",
+      border: "1px solid #e5e4e7",
+      boxShadow: "0px 4px 20px rgba(0,0,0,0.1)",
+      borderRadius: "8px",
     },
   };
 
@@ -183,23 +214,23 @@ function TransactionForm() {
 
   return (
     <Box>
-      <PageHeader 
-        title="반입 / 반출 등록" 
-        description="자재 반입·반출 내역을 등록하고 관리하세요." 
+      <PageHeader
+        title="반입 / 반출 등록"
+        description="자재 반입·반출 내역을 등록하고 관리하세요."
       />
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
       <Box sx={{ display: "flex", gap: 3, alignItems: "stretch", width: "100%" }}>
-        
+
         {/* 왼쪽: 신규 등록 폼 */}
         <Box sx={{ width: "400px", flexShrink: 0, display: "flex" }}>
-          <Paper 
-            elevation={0} 
-            sx={{ 
-              borderRadius: 2, 
-              p: 3.5, 
+          <Paper
+            elevation={0}
+            sx={{
+              borderRadius: 2,
+              p: 3.5,
               backgroundColor: "background.paper",
               width: "100%",
               height: "100%",
@@ -214,25 +245,61 @@ function TransactionForm() {
               </Typography>
               <form onSubmit={handleSubmit}>
                 <Stack spacing={2.2}>
-                  <TextField
-                    select fullWidth label="자재 *" value={form.material_id}
-                    onChange={handleChange("material_id")} required size="small"
-                    SelectProps={menuPropsStyle.MenuProps}
-                  >
-                    {materials.map((m) => (
-                      <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
-                    ))}
-                  </TextField>
+                  <Autocomplete
+                    freeSolo
+                    options={materials}
+                    getOptionLabel={(option) =>
+                      typeof option === "string" ? option : option.name
+                    }
+                    inputValue={form.material_name}
+                    onInputChange={(e, newInputValue) =>
+                      setForm((f) => ({ ...f, material_name: newInputValue }))
+                    }
+                    onChange={(e, newValue) => {
+                      const name =
+                        typeof newValue === "string"
+                          ? newValue
+                          : newValue?.name ?? "";
+                      setForm((f) => ({ ...f, material_name: name }));
+                    }}
+                    ListboxProps={listboxStyle}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="자재 * (검색 또는 직접 입력)"
+                        required
+                        size="small"
+                      />
+                    )}
+                  />
 
-                  <TextField
-                    select fullWidth label="거래처 *" value={form.company_id}
-                    onChange={handleChange("company_id")} required size="small"
-                    SelectProps={menuPropsStyle.MenuProps}
-                  >
-                    {companies.map((c) => (
-                      <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                    ))}
-                  </TextField>
+                  <Autocomplete
+                    freeSolo
+                    options={companies}
+                    getOptionLabel={(option) =>
+                      typeof option === "string" ? option : option.name
+                    }
+                    inputValue={form.company_name}
+                    onInputChange={(e, newInputValue) =>
+                      setForm((f) => ({ ...f, company_name: newInputValue }))
+                    }
+                    onChange={(e, newValue) => {
+                      const name =
+                        typeof newValue === "string"
+                          ? newValue
+                          : newValue?.name ?? "";
+                      setForm((f) => ({ ...f, company_name: name }));
+                    }}
+                    ListboxProps={listboxStyle}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="거래처 * (검색 또는 직접 입력)"
+                        required
+                        size="small"
+                      />
+                    )}
+                  />
 
                   <TextField
                     select fullWidth label="구분 *" value={form.type}
@@ -250,20 +317,28 @@ function TransactionForm() {
                   {form.type === "반출" && (
                     <>
                       <TextField
-                        fullWidth label="임대 시작일" type="date" value={form.rental_start_date}
+                        fullWidth
+                        label="임대 시작일"
+                        type="date"
+                        value={form.rental_start_date}
                         onChange={handleChange("rental_start_date")}
-                        InputLabelProps={{ shrink: true }} size="small"
+                        InputLabelProps={{ shrink: true }}
+                        size="small"
                       />
                       <TextField
-                        fullWidth label="반납 예정일" type="date" value={form.rental_due_date}
+                        fullWidth
+                        label="반납 예정일"
+                        type="date"
+                        value={form.rental_due_date}
                         onChange={handleChange("rental_due_date")}
-                        InputLabelProps={{ shrink: true }} size="small"
+                        InputLabelProps={{ shrink: true }}
+                        size="small"
                       />
                     </>
                   )}
 
                   <TextField
-                    fullWidth label="비고" multiline rows={13} value={form.note}
+                    fullWidth label="비고" multiline rows={form.type === "반출" ? 6 : 10} value={form.note}
                     onChange={handleChange("note")} size="small"
                   />
                 </Stack>
@@ -271,11 +346,11 @@ function TransactionForm() {
             </Box>
 
             <Box sx={{ pt: 3 }}>
-              <Button 
-                type="submit" 
-                variant="contained" 
-                fullWidth 
-                size="large" 
+              <Button
+                type="submit"
+                variant="contained"
+                fullWidth
+                size="large"
                 onClick={handleSubmit}
                 sx={{ py: 1.2, fontWeight: 600 }}
               >
@@ -306,25 +381,47 @@ function TransactionForm() {
           {editError && <Alert severity="error" sx={{ mb: 2 }}>{editError}</Alert>}
           {editForm && (
             <Stack spacing={2} sx={{ mt: 1 }}>
-              <TextField
-                select label="자재" value={editForm.material_id}
-                onChange={handleEditChange("material_id")} required size="small"
-                SelectProps={menuPropsStyle.MenuProps}
-              >
-                {materials.map((m) => (
-                  <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
-                ))}
-              </TextField>
+              <Autocomplete
+                freeSolo
+                options={materials}
+                getOptionLabel={(option) =>
+                  typeof option === "string" ? option : option.name
+                }
+                inputValue={editForm.material_name}
+                onInputChange={(e, newInputValue) =>
+                  setEditForm((f) => ({ ...f, material_name: newInputValue }))
+                }
+                onChange={(e, newValue) => {
+                  const name =
+                    typeof newValue === "string" ? newValue : newValue?.name ?? "";
+                  setEditForm((f) => ({ ...f, material_name: name }));
+                }}
+                ListboxProps={listboxStyle}
+                renderInput={(params) => (
+                  <TextField {...params} label="자재 (검색 또는 직접 입력)" required size="small" />
+                )}
+              />
 
-              <TextField
-                select label="거래처" value={editForm.company_id}
-                onChange={handleEditChange("company_id")} required size="small"
-                SelectProps={menuPropsStyle.MenuProps}
-              >
-                {companies.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                ))}
-              </TextField>
+              <Autocomplete
+                freeSolo
+                options={companies}
+                getOptionLabel={(option) =>
+                  typeof option === "string" ? option : option.name
+                }
+                inputValue={editForm.company_name}
+                onInputChange={(e, newInputValue) =>
+                  setEditForm((f) => ({ ...f, company_name: newInputValue }))
+                }
+                onChange={(e, newValue) => {
+                  const name =
+                    typeof newValue === "string" ? newValue : newValue?.name ?? "";
+                  setEditForm((f) => ({ ...f, company_name: name }));
+                }}
+                ListboxProps={listboxStyle}
+                renderInput={(params) => (
+                  <TextField {...params} label="거래처 (검색 또는 직접 입력)" required size="small" />
+                )}
+              />
 
               <TextField
                 select label="구분" value={editForm.type}
@@ -340,14 +437,20 @@ function TransactionForm() {
               />
 
               <TextField
-                label="임대 시작일" type="date" value={editForm.rental_start_date}
+                label="임대 시작일"
+                type="date"
+                value={editForm.rental_start_date}
                 onChange={handleEditChange("rental_start_date")}
-                InputLabelProps={{ shrink: true }} size="small"
+                InputLabelProps={{ shrink: true }}
+                size="small"
               />
               <TextField
-                label="반납 예정일" type="date" value={editForm.rental_due_date}
+                label="반납 예정일"
+                type="date"
+                value={editForm.rental_due_date}
                 onChange={handleEditChange("rental_due_date")}
-                InputLabelProps={{ shrink: true }} size="small"
+                InputLabelProps={{ shrink: true }}
+                size="small"
               />
 
               <TextField
