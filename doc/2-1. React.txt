@@ -31,6 +31,8 @@ client.interceptors.response.use(
 );
 
 export default client;
+
+------------------------------------------------------------------------
 2. src/api/index.js (엔드포인트 모음)
 javascript
 import client from "./client";
@@ -61,6 +63,8 @@ export const getDamageList = (resolved) =>
   client.get("/damage-history/", { params: resolved !== undefined ? { resolved } : {} });
 export const createDamage = (data) => client.post("/damage-history/", data);
 export const resolveDamage = (id) => client.patch(`/damage-history/${id}/resolve`);
+
+-----------------------------------------------------------------------------------------
 3. src/App.jsx (라우팅)
 jsx
 import { BrowserRouter, Routes, Route } from "react-router-dom";
@@ -139,6 +143,7 @@ function Sidebar() {
   );
 }
 
+----------------------------------------------------
 export default Sidebar;
 5. src/components/Table.jsx (재사용 테이블)
 jsx
@@ -314,6 +319,7 @@ function TransactionForm() {
 }
 
 export default TransactionForm;
+-------------------------------------------------------------
 7. src/pages/InventoryStatus.jsx
 jsx
 import { useState, useEffect } from "react";
@@ -350,6 +356,8 @@ function InventoryStatus() {
 }
 
 export default InventoryStatus;
+
+================================================
 8. src/pages/ReturnAlerts.jsx
 jsx
 import { useState, useEffect } from "react";
@@ -402,6 +410,8 @@ function ReturnAlerts() {
 }
 
 export default ReturnAlerts;
+
+-----------------------------------------------------------------------
 9. src/pages/Settlements.jsx
 jsx
 import { useState, useEffect } from "react";
@@ -461,6 +471,8 @@ function Settlements() {
 }
 
 export default Settlements;
+---------------------------------------------------------------
+
 10. src/pages/DamageHistory.jsx
 jsx
 import { useState, useEffect } from "react";
@@ -520,6 +532,7 @@ function DamageHistory() {
 }
 
 export default DamageHistory;
+------------------------------------------------------------
 11. src/main.jsx (진입점 확인)
 
 Vite 기본 템플릿에 있는 main.jsx는 그대로 두시면 됩니다:
@@ -538,7 +551,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
 bash
 npm run dev
 
-기본적으로 http://localhost:5173에서 실행됩니다. FastAPI(main.py)의 CORS 설정이 localhost:3000으로 되어 있는데, Vite는 기본 포트가 3000이 아니라 5173이니 백엔드 CORS 설정을 수정해야 합니다.
+기본적으로 http://localhost:5173에서 실행됩니다. 
+FastAPI(main.py)의 CORS 설정이 localhost:3000으로 되어 있는데, 
+Vite는 기본 포트가 3000이 아니라 5173이니 백엔드 CORS 설정을 수정해야 합니다.
 
 python
 # main.py

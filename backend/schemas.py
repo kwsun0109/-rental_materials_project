@@ -79,3 +79,12 @@ class DamageResponse(DamageCreate):
 
     class Config:
         from_attributes = True
+
+class TransactionUpdate(BaseModel):
+    material_id: Optional[int] = None
+    company_id: Optional[int] = None
+    type: Optional[str] = None
+    qty: Optional[int] = None
+    rental_start_date: Optional[date] = None
+    rental_due_date: Optional[date] = None
+    note: Optional[str] = None

@@ -1,3 +1,4 @@
+# 임대자재 대여/ 반납 목록관리
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -5,6 +6,11 @@ from database import get_db
 import models, schemas
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+
+@router.get("/", response_model=list[schemas.TransactionResponse])
+def get_transactions(db: Session = Depends(get_db)):
+    return db.query(models.Transaction).order_by(models.Transaction.id.desc()).all()
 
 
 @router.post("/", response_model=schemas.TransactionResponse)
@@ -37,6 +43,49 @@ def get_due_soon(db: Session = Depends(get_db)):
           AND rental_due_date <= DATE_ADD(CURDATE(), INTERVAL 3 DAY)
     """))
     return result.mappings().all()
+
+
+@router.get("/{transaction_id}", response_model=schemas.TransactionResponse)
+def get_transaction(transaction_id: int, db: Session = Depends(get_db)):
+    tx = db.query(models.Transaction).filter(models.Transaction.id == transaction_id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="거래 기록을 찾을 수 없습니다.")
+    return tx
+
+
+@router.put("/{transaction_id}", response_model=schemas.TransactionResponse)
+def update_transaction(transaction_id: int, payload: schemas.TransactionUpdate, db: Session = Depends(get_db)):
+    tx = db.query(models.Transaction).filter(models.Transaction.id == transaction_id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="거래 기록을 찾을 수 없습니다.")
+
+    if payload.type is not None and payload.type not in ("반입", "반출"):
+        raise HTTPException(status_code=400, detail="type은 '반입' 또는 '반출'이어야 합니다.")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(tx, key, value)
+
+    db.commit()
+    db.refresh(tx)
+    return tx
+
+
+@router.delete("/{transaction_id}")
+def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
+    tx = db.query(models.Transaction).filter(models.Transaction.id == transaction_id).first()
+    if not tx:
+        raise HTTPException(status_code=404, detail="거래 기록을 찾을 수 없습니다.")
+
+    # 반입 건 삭제 시, 등록 때 증가시켰던 total_qty를 되돌림
+    if tx.type == "반입":
+        material = db.query(models.Material).filter(models.Material.id == tx.material_id).first()
+        if material:
+            material.total_qty -= tx.qty
+
+    db.delete(tx)
+    db.commit()
+    return {"message": "삭제되었습니다."}
 
 
 @router.patch("/{transaction_id}/return")

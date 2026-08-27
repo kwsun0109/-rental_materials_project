@@ -12,7 +12,7 @@ app = FastAPI(title="자재 반입/반출 관리 시스템")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],   # React 개발 서버
+    allow_origins=["http://localhost:5173"],   # React 개발 서버
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

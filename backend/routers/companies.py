@@ -1,3 +1,4 @@
+# 업체 정보 관련...
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db

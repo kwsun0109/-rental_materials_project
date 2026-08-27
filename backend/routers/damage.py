@@ -1,3 +1,4 @@
+# 임대 자재 (파손, 훼손 이력 관리-망실처리)
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db

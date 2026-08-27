@@ -1,3 +1,4 @@
+# 임대자재 정산 내역 관리...(정산(청구, 입금), 미수금 관리)
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
