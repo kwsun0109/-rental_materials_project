@@ -45,6 +45,8 @@ export const getDamageList = (resolved) =>
     params: resolved !== undefined ? { resolved } : {},
   });
 export const createDamage = (data) => client.post("/damage-history/", data);
+export const updateDamage = (id, data) => client.put(`/damage-history/${id}`, data);
+export const deleteDamage = (id) => client.delete(`/damage-history/${id}`);
 export const resolveDamage = (id) =>
   client.patch(`/damage-history/${id}/resolve`);
 export const unresolveDamage = (id) =>
