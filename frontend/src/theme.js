@@ -32,7 +32,7 @@ const theme = createTheme({
         paper: {
           backgroundColor: "#f4edff",
           // 사이드바 우측에 생기던 세로 경계선을 주석 처리하여 없앱니다
-          // borderRight: "1px solid #e5d9ff",
+          borderRight: "1px solid #e5d9ff",
         },
       },
     },

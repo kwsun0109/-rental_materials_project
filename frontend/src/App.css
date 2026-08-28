@@ -181,4 +181,10 @@
     right: 0;
     border-right-color: var(--border);
   }
+
+  /* MUI 드롭다운(Menu)의 전체 높이와 스크롤바를 전역으로 강제 고정 */
+  .MuiMenu-paper {
+    max-height: 250px !important;
+    overflow-y: auto !important;
+  }
 }
