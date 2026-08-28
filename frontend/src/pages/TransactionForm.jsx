@@ -107,7 +107,7 @@ function TransactionForm() {
         type: form.type,
         qty: Number(form.qty),
         rental_start_date: form.rental_start_date || null,
-        rental_due_date: form.rental_due_date || null,
+        rental_due_date: form.type === "반출" ? (form.rental_due_date || null) : null,
         note: form.note,
       });
       setSuccess("등록되었습니다.");
@@ -154,7 +154,7 @@ function TransactionForm() {
         type: editForm.type,
         qty: Number(editForm.qty),
         rental_start_date: editForm.rental_start_date || null,
-        rental_due_date: editForm.rental_due_date || null,
+        rental_due_date: editForm.type === "반출" ? (editForm.rental_due_date || null) : null,
         note: editForm.note,
       });
       closeEdit();
@@ -180,7 +180,7 @@ function TransactionForm() {
     { key: "company_id", label: "거래처", render: (row) => companyName(row.company_id) },
     { key: "type", label: "구분" },
     { key: "qty", label: "수량" },
-    { key: "rental_start_date", label: "시작일", render: (row) => row.rental_start_date ?? "-" },
+    { key: "rental_start_date", label: "시작일/입고일", render: (row) => row.rental_start_date ?? "-" },
     { key: "rental_due_date", label: "반납예정일", render: (row) => row.rental_due_date ?? "-" },
     { key: "returned_at", label: "반납일", render: (row) => row.returned_at ? row.returned_at.slice(0, 10) : "-" },
     {
@@ -299,7 +299,18 @@ function TransactionForm() {
                     onChange={handleChange("qty")} required size="small"
                   />
 
-                  {form.type === "반출" && (
+                  {/* 반입일 때는 입고일자, 반출일 때는 임대 시작일 및 반납 예정일 표시 */}
+                  {form.type === "반입" ? (
+                    <TextField
+                      fullWidth
+                      label="입고일자"
+                      type="date"
+                      value={form.rental_start_date}
+                      onChange={handleChange("rental_start_date")}
+                      InputLabelProps={{ shrink: true }}
+                      size="small"
+                    />
+                  ) : (
                     <>
                       <TextField
                         fullWidth
@@ -419,22 +430,35 @@ function TransactionForm() {
                 onChange={handleEditChange("qty")} size="small"
               />
 
-              <TextField
-                label="임대 시작일"
-                type="date"
-                value={editForm.rental_start_date}
-                onChange={handleEditChange("rental_start_date")}
-                InputLabelProps={{ shrink: true }}
-                size="small"
-              />
-              <TextField
-                label="반납 예정일"
-                type="date"
-                value={editForm.rental_due_date}
-                onChange={handleEditChange("rental_due_date")}
-                InputLabelProps={{ shrink: true }}
-                size="small"
-              />
+              {editForm.type === "반입" ? (
+                <TextField
+                  label="입고일자"
+                  type="date"
+                  value={editForm.rental_start_date}
+                  onChange={handleEditChange("rental_start_date")}
+                  InputLabelProps={{ shrink: true }}
+                  size="small"
+                />
+              ) : (
+                <>
+                  <TextField
+                    label="임대 시작일"
+                    type="date"
+                    value={editForm.rental_start_date}
+                    onChange={handleEditChange("rental_start_date")}
+                    InputLabelProps={{ shrink: true }}
+                    size="small"
+                  />
+                  <TextField
+                    label="반납 예정일"
+                    type="date"
+                    value={editForm.rental_due_date}
+                    onChange={handleEditChange("rental_due_date")}
+                    InputLabelProps={{ shrink: true }}
+                    size="small"
+                  />
+                </>
+              )}
 
               <TextField
                 label="비고" multiline rows={2} value={editForm.note}
