@@ -47,9 +47,9 @@ function ReturnAlerts() {
       label: "상태",
       render: (row) =>
         row.returned_at ? (
-          <Chip label="반납 완료" color="success" size="small" />
+          <Chip label="반납 임박" color="success" size="small" />
         ) : (
-          <Chip label="반납 임박" color="warning" size="small" />
+          <Chip label="반납 완료" color="warning" size="small" />
         ),
     },
     {
