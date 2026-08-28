@@ -46,3 +46,6 @@ export const unmarkSettlementComplete = (id) =>
 
 export const unresolveDamage = (id) =>
   client.patch(`/damage-history/${id}/unresolve`);
+
+export const calculatePeriodAmount = (data) =>
+  client.post("/settlements/calculate", data);
