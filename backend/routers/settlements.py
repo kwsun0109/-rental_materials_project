@@ -105,6 +105,28 @@ def calculate_period_amount(
 
     return result
 
+@router.put("/{settlement_id}", response_model=schemas.SettlementResponse)
+def update_settlement(
+    settlement_id: int, 
+    payload: schemas.SettlementUpdate, 
+    db: Session = Depends(get_db)
+):
+    """정산 내역 수정"""
+    settlement = db.query(models.Settlement).filter(models.Settlement.id == settlement_id).first()
+    if not settlement:
+        raise HTTPException(status_code=404, detail="정산 내역을 찾을 수 없습니다.")
+
+    if payload.status and payload.status not in ("미정산", "정산완료"):
+        raise HTTPException(status_code=400, detail="status는 '미정산' 또는 '정산완료'이어야 합니다.")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(settlement, key, value)
+
+    db.commit()
+    db.refresh(settlement)
+    return settlement
+
 @router.delete("/{settlement_id}")
 def delete_settlement(settlement_id: int, db: Session = Depends(get_db)):
     settlement = db.query(models.Settlement).filter(models.Settlement.id == settlement_id).first()

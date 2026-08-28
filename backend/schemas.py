@@ -55,6 +55,13 @@ class SettlementResponse(SettlementCreate):
     class Config:
         from_attributes = True
 
+class SettlementUpdate(BaseModel):
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
+    total_amount: Optional[float] = None  # 청구 금액
+    paid_amount: Optional[float] = None   # 입금 금액
+    status: Optional[str] = None          # '미정산', '정산완료' 등
+    note: Optional[str] = None            # 비고
 
 class DamageCreate(BaseModel):
     transaction_id: int
