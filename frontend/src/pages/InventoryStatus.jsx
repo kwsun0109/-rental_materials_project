@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Box, Typography, TextField, LinearProgress, Chip } from "@mui/material";
+import { Box, Typography, TextField, LinearProgress, Chip, InputAdornment } from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
 import Table from "../components/Table";
 import { getAllMaterialsInventory } from "../api";
 import PageHeader from "../components/PageHeader";
@@ -21,19 +22,24 @@ function InventoryStatus() {
 
   useEffect(() => {
     const load = async () => {
-      // 기존: 자재마다 별도 API 호출 (N+1) -> 한 번의 호출로 통합
       const { data } = await getAllMaterialsInventory();
       setRows(data);
     };
     load();
   }, []);
 
-  const filteredRows = rows.filter((row) =>
-    (row.name || "").toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // 🔍 자재명 또는 거래처명으로 필터링
+  const filteredRows = rows.filter((row) => {
+    const materialName = (row.name || "").toLowerCase();
+    const companyName = (row.company_name || "").toLowerCase();
+    const keyword = searchTerm.toLowerCase();
+    return materialName.includes(keyword) || companyName.includes(keyword);
+  });
 
   const columns = [
     { key: "name", label: "자재명" },
+    // 👇 거래처명 컬럼 추가
+    { key: "company_name", label: "거래처명", render: (row) => row.company_name ?? "-" },
     { key: "category", label: "카테고리" },
     {
       key: "total_qty",
@@ -96,13 +102,20 @@ function InventoryStatus() {
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
         <PageHeader title="재고 현황" description="자재별 보유/가용 수량을 확인하세요." />
 
+        {/* 🔍 자재명 또는 거래처명 검색 입력창 */}
         <TextField
           size="small"
-          label="자재명 검색"
+          placeholder="자재명 또는 거래처 검색"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="검색할 자재명 입력"
-          sx={{ width: "220px" }}
+          sx={{ width: "240px", backgroundColor: "background.paper", borderRadius: 1 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" color="action" />
+              </InputAdornment>
+            ),
+          }}
         />
       </Box>
 

@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import {
   Box, Typography, TextField, MenuItem, Button, Stack, Alert,
   Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Paper,
-  Autocomplete,
+  Autocomplete, InputAdornment,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import SearchIcon from "@mui/icons-material/Search";
 import {
   getMaterials, getCompanies, createTransaction,
   getTransactions, updateTransaction, deleteTransaction,
@@ -22,7 +23,7 @@ const emptyForm = {
   qty: "",
   rental_start_date: "",
   rental_due_date: "",
-  returned_at: "", // 👈 반납일 수동 입력을 위한 필드 추가
+  returned_at: "",
   note: "",
 };
 
@@ -33,6 +34,8 @@ function TransactionForm() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const [searchTerm, setSearchTerm] = useState(""); // 👈 검색어 상태 추가
 
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState(null);
@@ -176,6 +179,14 @@ function TransactionForm() {
       setError(err.message);
     }
   };
+
+  // 🔍 자재명 또는 거래처명으로 필터링된 거래 내역 계산
+  const filteredTransactions = transactions.filter((row) => {
+    const mName = materialName(row.material_id).toLowerCase();
+    const cName = companyName(row.company_id).toLowerCase();
+    const keyword = searchTerm.toLowerCase();
+    return mName.includes(keyword) || cName.includes(keyword);
+  });
   
   const columns = [
     { key: "id", label: "ID" },
@@ -302,7 +313,6 @@ function TransactionForm() {
                     onChange={handleChange("qty")} required size="small"
                   />
 
-                  {/* 반입/반출 공통으로 시작일/입고일과 반납예정일 표시 */}
                   <TextField
                     fullWidth
                     label={form.type === "반입" ? "입고일자" : "임대 시작일"}
@@ -321,8 +331,6 @@ function TransactionForm() {
                     InputLabelProps={{ shrink: true }}
                     size="small"
                   />
-
-                  {/* 반납일 수동 입력 필드 */}
                   <TextField
                     fullWidth
                     label="반납일 (수동 입력)"
@@ -356,15 +364,30 @@ function TransactionForm() {
           </Paper>
         </Box>
 
-        {/* 오른쪽: 등록 내역 리스트 */}
+        {/* 오른쪽: 등록 내역 리스트 및 검색창 */}
         <Box sx={{ flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, height: "32px" }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              등록 내역 ({transactions.length}건)
+              등록 내역 ({filteredTransactions.length}건)
             </Typography>
+            {/* 🔍 자재명/거래처명 검색 입력창 */}
+            <TextField
+              size="small"
+              placeholder="자재명 또는 거래처 검색"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              sx={{ width: "240px", backgroundColor: "background.paper", borderRadius: 1 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
           </Box>
           <Box sx={{ flexGrow: 1 }}>
-            <Table columns={columns} rows={transactions} />
+            <Table columns={columns} rows={filteredTransactions} />
           </Box>
         </Box>
 

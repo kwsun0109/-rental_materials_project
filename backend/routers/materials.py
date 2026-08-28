@@ -26,8 +26,9 @@ def get_materials(db: Session = Depends(get_db)):
 # 만약 /{material_id}가 먼저 오면 "/materials/inventory" 요청이
 # material_id="inventory"로 잘못 매칭되어 422 에러가 발생합니다.
 @router.get("/inventory")
+@router.get("/inventory")
 def get_all_materials_inventory(db: Session = Depends(get_db)):
-    """전체 자재의 실시간 재고(가용 수량) 조회 - 한 번의 쿼리로 처리"""
+    """전체 자재의 실시간 재고(가용 수량) 및 최근 거래처 조회"""
     from sqlalchemy import text
     result = db.execute(
         text("""
@@ -39,7 +40,15 @@ def get_all_materials_inventory(db: Session = Depends(get_db)):
                 m.total_qty,
                 m.total_qty - COALESCE(SUM(
                     CASE WHEN t.type = '반출' AND t.returned_at IS NULL THEN t.qty ELSE 0 END
-                ), 0) AS available_qty
+                ), 0) AS available_qty,
+                (
+                    SELECT c.name 
+                    FROM transactions tx 
+                    LEFT JOIN companies c ON tx.company_id = c.id 
+                    WHERE tx.material_id = m.id 
+                    ORDER BY tx.id DESC 
+                    LIMIT 1
+                ) AS company_name
             FROM materials m
             LEFT JOIN transactions t ON m.id = t.material_id
             GROUP BY m.id, m.name, m.category, m.unit, m.total_qty

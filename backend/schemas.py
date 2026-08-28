@@ -9,6 +9,7 @@ class TransactionCreate(BaseModel):
     qty: int
     rental_start_date: Optional[date] = None
     rental_due_date: Optional[date] = None
+    returned_at: Optional[datetime] = None  # 👈 등록 시 수동 반납일 입력을 위해 추가
     note: Optional[str] = None
 
 class MaterialCreate(BaseModel):
@@ -79,6 +80,7 @@ class TransactionUpdate(BaseModel):
     qty: Optional[int] = None
     rental_start_date: Optional[date] = None
     rental_due_date: Optional[date] = None
+    returned_at: Optional[datetime] = None  # 👈 수정 시 수동 반납일 입력을 위해 추가
     note: Optional[str] = None
 
 class TransactionResponse(BaseModel):
@@ -87,7 +89,7 @@ class TransactionResponse(BaseModel):
     company_id: int
     type: str
     qty: int
-    rental_start_date: Optional[date] = None  # 👈 이 필드가 누락되어 있어서 추가했습니다!
+    rental_start_date: Optional[date] = None
     rental_due_date: Optional[date] = None
     returned_at: Optional[datetime] = None
     material_name: Optional[str] = None
