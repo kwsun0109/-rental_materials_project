@@ -7,7 +7,7 @@ import PageHeader from "../components/PageHeader";
 
 function ReturnAlerts() {
   const [rows, setRows] = useState([]);
-  const [searchTerm, setSearchTerm] = useState(""); // 🔍 검색어 상태 추가
+  const [searchTerm, setSearchTerm] = useState("");
 
   const load = () => {
     getDueSoon().then((res) => setRows(res.data));
@@ -27,7 +27,7 @@ function ReturnAlerts() {
     load();
   };
 
-  // 🔍 자재명 또는 회사명에 검색어가 포함되어 있는지 필터링
+  // 자재명 또는 회사명에 검색어가 포함되어 있는지 필터링
   const filteredRows = rows.filter((row) => {
     const materialName = (row.material_name || "").toLowerCase();
     const companyName = (row.company_name || "").toLowerCase();
@@ -45,12 +45,27 @@ function ReturnAlerts() {
     {
       key: "status",
       label: "상태",
-      render: (row) =>
-        row.returned_at ? (
-          <Chip label="반납 임박" color="success" size="small" />
-        ) : (
-          <Chip label="반납 완료" color="warning" size="small" />
-        ),
+      render: (row) => {
+        // 1. 실제로 반납 처리가 완료된 경우
+        if (row.returned_at) {
+          return <Chip label="반납 완료" color="success" size="small" />;
+        }
+
+        // 2. 반납 예정일과 오늘 날짜 비교
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // 시간 비교 제외하고 날짜만 비교
+        
+        const dueDate = new Date(row.rental_due_date);
+        dueDate.setHours(0, 0, 0, 0);
+
+        // 예정일이 오늘보다 미래인 경우 (아직 기간이 남음)
+        if (dueDate > today) {
+          return <Chip label="대기 중" color="default" size="small" />; // 혹은 원하는 라벨명
+        }
+
+        // 예정일이 오늘이거나 지난 경우 (반납 임박)
+        return <Chip label="반납 임박" color="warning" size="small" />;
+      },
     },
     {
       key: "action",
@@ -83,7 +98,6 @@ function ReturnAlerts() {
 
   return (
     <PageContainer>
-      {/* 상단 타이틀과 우측 검색 입력창 배치 */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
         <PageHeader title="반납 알림 (3일 이내)" description="반납 예정일이 임박한 건을 확인하세요." />
         
@@ -97,7 +111,6 @@ function ReturnAlerts() {
         />
       </Box>
 
-      {/* 필터링된 결과(filteredRows)를 테이블에 전달 */}
       <Table columns={columns} rows={filteredRows} />
     </PageContainer>
   );
