@@ -66,7 +66,6 @@ function TransactionForm() {
     return found ? found.name : companyId;
   };
 
-  // 이름으로 기존 자재를 찾고, 없으면 새로 생성해서 id를 반환
   const resolveMaterialId = async (name) => {
     const trimmed = (name || "").trim();
     if (!trimmed) throw new Error("자재를 입력해주세요.");
@@ -299,8 +298,8 @@ function TransactionForm() {
                     onChange={handleChange("qty")} required size="small"
                   />
 
-                  {/* 반입일 때는 입고일자, 반출일 때는 임대 시작일 및 반납 예정일 표시 */}
-                  {form.type === "반입" ? (
+                  {/* 구분 값에 따른 조건부 날짜 필드 렌더링 */}
+                  {form.type === "반입" && (
                     <TextField
                       fullWidth
                       label="입고일자"
@@ -310,7 +309,9 @@ function TransactionForm() {
                       InputLabelProps={{ shrink: true }}
                       size="small"
                     />
-                  ) : (
+                  )}
+
+                  {form.type === "반출" && (
                     <>
                       <TextField
                         fullWidth
@@ -430,7 +431,7 @@ function TransactionForm() {
                 onChange={handleEditChange("qty")} size="small"
               />
 
-              {editForm.type === "반입" ? (
+              {editForm.type === "반입" && (
                 <TextField
                   label="입고일자"
                   type="date"
@@ -439,7 +440,9 @@ function TransactionForm() {
                   InputLabelProps={{ shrink: true }}
                   size="small"
                 />
-              ) : (
+              )}
+
+              {editForm.type === "반출" && (
                 <>
                   <TextField
                     label="임대 시작일"
