@@ -22,6 +22,7 @@ const emptyForm = {
   qty: "",
   rental_start_date: "",
   rental_due_date: "",
+  returned_at: "", // 👈 반납일 수동 입력을 위한 필드 추가
   note: "",
 };
 
@@ -106,7 +107,8 @@ function TransactionForm() {
         type: form.type,
         qty: Number(form.qty),
         rental_start_date: form.rental_start_date || null,
-        rental_due_date: form.type === "반출" ? (form.rental_due_date || null) : null,
+        rental_due_date: form.rental_due_date || null,
+        returned_at: form.returned_at ? new Date(form.returned_at).toISOString() : null,
         note: form.note,
       });
       setSuccess("등록되었습니다.");
@@ -126,6 +128,7 @@ function TransactionForm() {
       qty: row.qty,
       rental_start_date: row.rental_start_date ?? "",
       rental_due_date: row.rental_due_date ?? "",
+      returned_at: row.returned_at ? row.returned_at.slice(0, 10) : "",
       note: row.note ?? "",
     });
     setEditError("");
@@ -153,7 +156,8 @@ function TransactionForm() {
         type: editForm.type,
         qty: Number(editForm.qty),
         rental_start_date: editForm.rental_start_date || null,
-        rental_due_date: editForm.type === "반출" ? (editForm.rental_due_date || null) : null,
+        rental_due_date: editForm.rental_due_date || null,
+        returned_at: editForm.returned_at ? new Date(editForm.returned_at).toISOString() : null,
         note: editForm.note,
       });
       closeEdit();
@@ -298,44 +302,39 @@ function TransactionForm() {
                     onChange={handleChange("qty")} required size="small"
                   />
 
-                  {/* 구분 값에 따른 조건부 날짜 필드 렌더링 */}
-                  {form.type === "반입" && (
-                    <TextField
-                      fullWidth
-                      label="입고일자"
-                      type="date"
-                      value={form.rental_start_date}
-                      onChange={handleChange("rental_start_date")}
-                      InputLabelProps={{ shrink: true }}
-                      size="small"
-                    />
-                  )}
+                  {/* 반입/반출 공통으로 시작일/입고일과 반납예정일 표시 */}
+                  <TextField
+                    fullWidth
+                    label={form.type === "반입" ? "입고일자" : "임대 시작일"}
+                    type="date"
+                    value={form.rental_start_date}
+                    onChange={handleChange("rental_start_date")}
+                    InputLabelProps={{ shrink: true }}
+                    size="small"
+                  />
+                  <TextField
+                    fullWidth
+                    label="반납 예정일"
+                    type="date"
+                    value={form.rental_due_date}
+                    onChange={handleChange("rental_due_date")}
+                    InputLabelProps={{ shrink: true }}
+                    size="small"
+                  />
 
-                  {form.type === "반출" && (
-                    <>
-                      <TextField
-                        fullWidth
-                        label="임대 시작일"
-                        type="date"
-                        value={form.rental_start_date}
-                        onChange={handleChange("rental_start_date")}
-                        InputLabelProps={{ shrink: true }}
-                        size="small"
-                      />
-                      <TextField
-                        fullWidth
-                        label="반납 예정일"
-                        type="date"
-                        value={form.rental_due_date}
-                        onChange={handleChange("rental_due_date")}
-                        InputLabelProps={{ shrink: true }}
-                        size="small"
-                      />
-                    </>
-                  )}
+                  {/* 반납일 수동 입력 필드 */}
+                  <TextField
+                    fullWidth
+                    label="반납일 (수동 입력)"
+                    type="date"
+                    value={form.returned_at}
+                    onChange={handleChange("returned_at")}
+                    InputLabelProps={{ shrink: true }}
+                    size="small"
+                  />
 
                   <TextField
-                    fullWidth label="비고" multiline rows={form.type === "반출" ? 6 : 10} value={form.note}
+                    fullWidth label="비고" multiline rows={4} value={form.note}
                     onChange={handleChange("note")} size="small"
                   />
                 </Stack>
@@ -431,37 +430,30 @@ function TransactionForm() {
                 onChange={handleEditChange("qty")} size="small"
               />
 
-              {editForm.type === "반입" && (
-                <TextField
-                  label="입고일자"
-                  type="date"
-                  value={editForm.rental_start_date}
-                  onChange={handleEditChange("rental_start_date")}
-                  InputLabelProps={{ shrink: true }}
-                  size="small"
-                />
-              )}
-
-              {editForm.type === "반출" && (
-                <>
-                  <TextField
-                    label="임대 시작일"
-                    type="date"
-                    value={editForm.rental_start_date}
-                    onChange={handleEditChange("rental_start_date")}
-                    InputLabelProps={{ shrink: true }}
-                    size="small"
-                  />
-                  <TextField
-                    label="반납 예정일"
-                    type="date"
-                    value={editForm.rental_due_date}
-                    onChange={handleEditChange("rental_due_date")}
-                    InputLabelProps={{ shrink: true }}
-                    size="small"
-                  />
-                </>
-              )}
+              <TextField
+                label={editForm.type === "반입" ? "입고일자" : "임대 시작일"}
+                type="date"
+                value={editForm.rental_start_date}
+                onChange={handleEditChange("rental_start_date")}
+                InputLabelProps={{ shrink: true }}
+                size="small"
+              />
+              <TextField
+                label="반납 예정일"
+                type="date"
+                value={editForm.rental_due_date}
+                onChange={handleEditChange("rental_due_date")}
+                InputLabelProps={{ shrink: true }}
+                size="small"
+              />
+              <TextField
+                label="반납일 (수동 입력)"
+                type="date"
+                value={editForm.returned_at}
+                onChange={handleEditChange("returned_at")}
+                InputLabelProps={{ shrink: true }}
+                size="small"
+              />
 
               <TextField
                 label="비고" multiline rows={2} value={editForm.note}
