@@ -5,7 +5,7 @@ from typing import Optional
 class TransactionCreate(BaseModel):
     material_id: int
     company_id: int
-    type: str          # '반입' or '반출'
+    type: str           # '반입' or '반출'
     qty: int
     rental_start_date: Optional[date] = None
     rental_due_date: Optional[date] = None
@@ -57,7 +57,7 @@ class SettlementResponse(SettlementCreate):
 
 class DamageCreate(BaseModel):
     transaction_id: int
-    type: str          # '분실' or '파손'
+    type: str           # '분실' or '파손'
     description: Optional[str] = None
     responsible_party: Optional[str] = None
     resolved: bool = False
@@ -66,7 +66,7 @@ class DamageCreate(BaseModel):
 class DamageResponse(DamageCreate):
     id: int
     created_at: datetime
-    material_name: Optional[str] = None,
+    material_name: Optional[str] = None
     company_name: Optional[str] = None
 
     class Config:
@@ -81,17 +81,15 @@ class TransactionUpdate(BaseModel):
     rental_due_date: Optional[date] = None
     note: Optional[str] = None
 
-# 기존 Transaction 응답 스키마 예시
 class TransactionResponse(BaseModel):
     id: int
     material_id: int
     company_id: int
     type: str
     qty: int
+    rental_start_date: Optional[date] = None  # 👈 이 필드가 누락되어 있어서 추가했습니다!
     rental_due_date: Optional[date] = None
     returned_at: Optional[datetime] = None
-    
-    # 👇 이 필드들을 추가해 주어야 백엔드가 이름을 같이 보낼 수 있습니다!
     material_name: Optional[str] = None
     company_name: Optional[str] = None
 
