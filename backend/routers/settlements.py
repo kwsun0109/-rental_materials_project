@@ -26,7 +26,13 @@ def create_settlement(payload: schemas.SettlementCreate, db: Session = Depends(g
 
 @router.get("/", response_model=list[schemas.SettlementResponse])
 def get_settlements(db: Session = Depends(get_db)):
-    return db.query(models.Settlement).order_by(models.Settlement.id.desc()).all()
+    result = db.execute(text("""
+        SELECT s.*, c.name as company_name 
+        FROM settlements s
+        LEFT JOIN companies c ON s.company_id = c.id
+        ORDER BY s.id DESC
+    """))
+    return result.mappings().all()
 
 
 @router.get("/{settlement_id}", response_model=schemas.SettlementResponse)
@@ -60,6 +66,17 @@ def mark_settlement_complete(settlement_id: int, db: Session = Depends(get_db)):
     settlement.status = "정산완료"
     db.commit()
     return {"message": "정산 완료 처리되었습니다."}
+
+@router.patch("/{settlement_id}/uncomplete")
+def unmark_settlement_complete(settlement_id: int, db: Session = Depends(get_db)):
+    settlement = db.query(models.Settlement).filter(models.Settlement.id == settlement_id).first()
+    if not settlement:
+        raise HTTPException(status_code=404, detail="정산 내역을 찾을 수 없습니다.")
+    
+    # 상태를 '미정산' 또는 원래 상태로 되돌림 (프로젝트 내 상태 값에 맞게 수정)
+    settlement.status = "미정산" 
+    db.commit()
+    return {"message": "정산 취소 완료"}
 
 
 @router.get("/company/{company_id}/calculate-period")

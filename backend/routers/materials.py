@@ -6,6 +6,7 @@ import models, schemas
 
 router = APIRouter(prefix="/materials", tags=["materials"])
 
+
 @router.post("/", response_model=schemas.MaterialResponse)
 def create_material(payload: schemas.MaterialCreate, db: Session = Depends(get_db)):
     material = models.Material(**payload.model_dump())
@@ -14,9 +15,38 @@ def create_material(payload: schemas.MaterialCreate, db: Session = Depends(get_d
     db.refresh(material)
     return material
 
+
 @router.get("/", response_model=list[schemas.MaterialResponse])
 def get_materials(db: Session = Depends(get_db)):
     return db.query(models.Material).order_by(models.Material.id).all()
+
+
+# ⚠️ 주의: /inventory는 반드시 /{material_id} 라우트보다 위에 있어야 합니다.
+# FastAPI는 라우트를 위에서부터 순서대로 매칭하기 때문에,
+# 만약 /{material_id}가 먼저 오면 "/materials/inventory" 요청이
+# material_id="inventory"로 잘못 매칭되어 422 에러가 발생합니다.
+@router.get("/inventory")
+def get_all_materials_inventory(db: Session = Depends(get_db)):
+    """전체 자재의 실시간 재고(가용 수량) 조회 - 한 번의 쿼리로 처리"""
+    from sqlalchemy import text
+    result = db.execute(
+        text("""
+            SELECT
+                m.id,
+                m.name,
+                m.category,
+                m.unit,
+                m.total_qty,
+                m.total_qty - COALESCE(SUM(
+                    CASE WHEN t.type = '반출' AND t.returned_at IS NULL THEN t.qty ELSE 0 END
+                ), 0) AS available_qty
+            FROM materials m
+            LEFT JOIN transactions t ON m.id = t.material_id
+            GROUP BY m.id, m.name, m.category, m.unit, m.total_qty
+            ORDER BY m.id
+        """)
+    ).mappings().all()
+    return result
 
 
 @router.get("/{material_id}", response_model=schemas.MaterialResponse)

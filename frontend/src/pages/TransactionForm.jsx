@@ -9,9 +9,6 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import {
   getMaterials, getCompanies, createTransaction,
   getTransactions, updateTransaction, deleteTransaction,
-  // ⚠️ 아래 두 함수가 api.js에 없다면 추가로 만들어야 합니다.
-  // 예: export const createMaterial = (payload) => axios.post("/materials", payload);
-  //     export const createCompany  = (payload) => axios.post("/companies", payload);
   createMaterial, createCompany,
 } from "../api";
 import PageContainer from "../components/PageContainer";
@@ -235,7 +232,6 @@ function TransactionForm() {
               </Typography>
               <form onSubmit={handleSubmit}>
                 <Stack spacing={2.2}>
-<<<<<<< Updated upstream
                   <Autocomplete
                     freeSolo
                     options={materials}
@@ -253,7 +249,6 @@ function TransactionForm() {
                           : newValue?.name ?? "";
                       setForm((f) => ({ ...f, material_name: name }));
                     }}
-                    ListboxProps={listboxStyle}
                     renderInput={(params) => (
                       <TextField
                         {...params}
@@ -281,7 +276,6 @@ function TransactionForm() {
                           : newValue?.name ?? "";
                       setForm((f) => ({ ...f, company_name: name }));
                     }}
-                    ListboxProps={listboxStyle}
                     renderInput={(params) => (
                       <TextField
                         {...params}
@@ -291,57 +285,6 @@ function TransactionForm() {
                       />
                     )}
                   />
-=======
-                  {/* 자재 선택창: 높이 250px 제한 및 스크롤바 적용 */}
-                  <TextField
-                    select 
-                    fullWidth 
-                    label="자재 *" 
-                    value={form.material_id}
-                    onChange={handleChange("material_id")} 
-                    required 
-                    size="small"
-                    SelectProps={{
-                      MenuProps: {
-                        PaperProps: {
-                          style: {
-                            maxHeight: "250px",
-                            overflowY: "auto",
-                          },
-                        },
-                      },
-                    }}
-                  >
-                    {materials.map((m) => (
-                      <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
-                    ))}
-                  </TextField>
-
-                  {/* 거래처 선택창: 높이 250px 제한 및 스크롤바 적용 */}
-                  <TextField
-                    select 
-                    fullWidth 
-                    label="거래처 *" 
-                    value={form.company_id}
-                    onChange={handleChange("company_id")} 
-                    required 
-                    size="small"
-                    SelectProps={{
-                      MenuProps: {
-                        PaperProps: {
-                          style: {
-                            maxHeight: "250px",
-                            overflowY: "auto",
-                          },
-                        },
-                      },
-                    }}
-                  >
-                    {companies.map((c) => (
-                      <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                    ))}
-                  </TextField>
->>>>>>> Stashed changes
 
                   <TextField
                     select fullWidth label="구분 *" value={form.type}
@@ -423,7 +366,6 @@ function TransactionForm() {
           {editError && <Alert severity="error" sx={{ mb: 2 }}>{editError}</Alert>}
           {editForm && (
             <Stack spacing={2} sx={{ mt: 1 }}>
-<<<<<<< Updated upstream
               <Autocomplete
                 freeSolo
                 options={materials}
@@ -439,7 +381,6 @@ function TransactionForm() {
                     typeof newValue === "string" ? newValue : newValue?.name ?? "";
                   setEditForm((f) => ({ ...f, material_name: name }));
                 }}
-                ListboxProps={listboxStyle}
                 renderInput={(params) => (
                   <TextField {...params} label="자재 (검색 또는 직접 입력)" required size="small" />
                 )}
@@ -460,50 +401,10 @@ function TransactionForm() {
                     typeof newValue === "string" ? newValue : newValue?.name ?? "";
                   setEditForm((f) => ({ ...f, company_name: name }));
                 }}
-                ListboxProps={listboxStyle}
                 renderInput={(params) => (
                   <TextField {...params} label="거래처 (검색 또는 직접 입력)" required size="small" />
                 )}
               />
-=======
-              <TextField
-                select label="자재" value={editForm.material_id}
-                onChange={handleEditChange("material_id")} required size="small"
-                SelectProps={{
-                  MenuProps: {
-                    PaperProps: {
-                      style: {
-                        maxHeight: "250px",
-                        overflowY: "auto",
-                      },
-                    },
-                  },
-                }}
-              >
-                {materials.map((m) => (
-                  <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
-                ))}
-              </TextField>
-
-              <TextField
-                select label="거래처" value={editForm.company_id}
-                onChange={handleEditChange("company_id")} required size="small"
-                SelectProps={{
-                  MenuProps: {
-                    PaperProps: {
-                      style: {
-                        maxHeight: "250px",
-                        overflowY: "auto",
-                      },
-                    },
-                  },
-                }}
-              >
-                {companies.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                ))}
-              </TextField>
->>>>>>> Stashed changes
 
               <TextField
                 select label="구분" value={editForm.type}
