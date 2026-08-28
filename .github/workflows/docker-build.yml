@@ -24,9 +24,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 이미지 이름 소문자로 변환
+      - name: 이미지 이름 정리 (소문자 변환 + 선행 특수문자 제거)
         id: repo
-        run: echo "name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+        run: |
+          name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
+          owner=$(echo "$name" | cut -d'/' -f1)
+          repo=$(echo "$name" | cut -d'/' -f2- | sed 's/^[-_.]*//')
+          echo "name=$owner/$repo" >> "$GITHUB_OUTPUT"
 
       - name: 백엔드 이미지 빌드 & 푸시
         uses: docker/build-push-action@v5
@@ -53,9 +57,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 이미지 이름 소문자로 변환
+      - name: 이미지 이름 정리 (소문자 변환 + 선행 특수문자 제거)
         id: repo
-        run: echo "name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+        run: |
+          name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
+          owner=$(echo "$name" | cut -d'/' -f1)
+          repo=$(echo "$name" | cut -d'/' -f2- | sed 's/^[-_.]*//')
+          echo "name=$owner/$repo" >> "$GITHUB_OUTPUT"
 
       - name: 프론트엔드 이미지 빌드 & 푸시
         uses: docker/build-push-action@v5
