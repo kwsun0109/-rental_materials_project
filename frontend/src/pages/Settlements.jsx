@@ -4,10 +4,11 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete 
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
 import Table from "../components/Table";
 import { 
   getSettlements, markSettlementComplete, unmarkSettlementComplete, 
-  getCompanies, createSettlement, calculatePeriodAmount 
+  getCompanies, createSettlement, updateSettlement, calculatePeriodAmount 
 } from "../api";
 import PageContainer from "../components/PageContainer";
 import PageHeader from "../components/PageHeader";
@@ -17,11 +18,13 @@ function Settlements() {
   const [companies, setCompanies] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // 팝업(다이얼로그) 및 입력 폼 상태
+  // 팝업(다이얼로그) 및 입력 폼 상태 (수정 모드 여부 추가)
   const [open, setOpen] = useState(false);
+  const [isEdit, setIsEdit] = useState(false);
+  const [editId, setEditId] = useState(null);
+  
   const [form, setForm] = useState({
     company_id: "",
-    company_name: "",
     period_start: "",
     period_end: "",
     amount: "",
@@ -66,9 +69,27 @@ function Settlements() {
     }
   };
 
-  const handleOpen = () => {
-    setForm({ company_id: "", company_name: "", period_start: "", period_end: "", amount: "", status: "미정산" });
+  // 신규 등록 팝업 열기
+  const handleOpenCreate = () => {
+    setIsEdit(false);
+    setEditId(null);
+    setForm({ company_id: "", period_start: "", period_end: "", amount: "", status: "미정산" });
     setCalcInfo(null);
+    setOpen(true);
+  };
+
+  // 수정 팝업 열기 (기존 데이터 세팅)
+  const handleOpenEdit = (row) => {
+    setIsEdit(true);
+    setEditId(row.id);
+    setForm({
+      company_id: row.company_id,
+      period_start: row.period_start || "",
+      period_end: row.period_end || "",
+      amount: row.amount,
+      status: row.status
+    });
+    fetchCalcAmount(row.company_id, row.period_start, row.period_end);
     setOpen(true);
   };
 
@@ -76,23 +97,35 @@ function Settlements() {
     setOpen(false);
   };
 
+  // 저장 (등록 또는 수정 분기 처리)
   const handleSave = async () => {
-    if (!form.company_id || !form.period_start || !form.period_end || !form.amount) {
+    if (!form.company_id || !form.period_start || !form.period_end || form.amount === "") {
       alert("모든 필드를 입력해주세요.");
       return;
     }
+
     try {
-      await createSettlement({
+      const payload = {
         company_id: Number(form.company_id),
         period_start: form.period_start,
         period_end: form.period_end,
         amount: Number(form.amount),
         status: form.status
-      });
+      };
+
+      if (isEdit) {
+        await updateSettlement(editId, payload);
+        alert("정산 내역이 수정되었습니다.");
+      } else {
+        await createSettlement(payload);
+        alert("정산이 등록되었습니다.");
+      }
+
       handleClose();
       load();
     } catch (err) {
-      alert("정산 등록 중 오류가 발생했습니다.");
+      console.error(err);
+      alert(isEdit ? "정산 수정 중 오류가 발생했습니다." : "정산 등록 중 오류가 발생했습니다.");
     }
   };
 
@@ -124,9 +157,17 @@ function Settlements() {
     },
     {
       key: "action",
-      label: "처리",
+      label: "관리",
       render: (row) => (
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Button 
+            size="small" 
+            variant="outlined" 
+            startIcon={<EditIcon />}
+            onClick={() => handleOpenEdit(row)}
+          >
+            수정
+          </Button>
           {row.status === "정산완료" ? (
             <Button 
               size="small" 
@@ -168,7 +209,7 @@ function Settlements() {
           <Button 
             variant="contained" 
             startIcon={<AddIcon />} 
-            onClick={handleOpen}
+            onClick={handleOpenCreate}
             sx={{ height: "40px" }}
           >
             정산 등록
@@ -178,9 +219,11 @@ function Settlements() {
 
       <Table columns={columns} rows={filteredRows} />
 
-      {/* 신규 정산 등록 팝업 다이얼로그 */}
+      {/* 정산 등록 / 수정 공용 다이얼로그 */}
       <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
-        <DialogTitle sx={{ fontWeight: 700 }}>신규 정산 등록</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          {isEdit ? "정산 내역 수정" : "신규 정산 등록"}
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={2.2} sx={{ mt: 1 }}>
             <Autocomplete
@@ -236,7 +279,9 @@ function Settlements() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>취소</Button>
-          <Button variant="contained" onClick={handleSave}>등록</Button>
+          <Button variant="contained" onClick={handleSave}>
+            {isEdit ? "수정" : "등록"}
+          </Button>
         </DialogActions>
       </Dialog>
     </PageContainer>

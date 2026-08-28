@@ -22,12 +22,22 @@ export const updateTransaction = (id, data) =>
   client.put(`/transactions/${id}`, data);
 export const deleteTransaction = (id) => client.delete(`/transactions/${id}`);
 export const markReturned = (id) => client.patch(`/transactions/${id}/return`);
+export const unmarkReturned = (id) =>
+  client.patch(`/transactions/${id}/unreturn`);
 
 // Settlements
 export const getSettlements = () => client.get("/settlements/");
 export const createSettlement = (data) => client.post("/settlements/", data);
+export const updateSettlement = (id, data) =>
+  client.put(`/settlements/${id}`, data);
 export const markSettlementComplete = (id) =>
   client.patch(`/settlements/${id}/complete`);
+export const unmarkSettlementComplete = (id) =>
+  client.patch(`/settlements/${id}/uncomplete`);
+export const calculatePeriodAmount = (companyId, periodStart, periodEnd) =>
+  client.get(`/settlements/company/${companyId}/calculate-period`, {
+    params: { period_start: periodStart, period_end: periodEnd },
+  });
 
 // Damage history
 export const getDamageList = (resolved) =>
@@ -37,15 +47,5 @@ export const getDamageList = (resolved) =>
 export const createDamage = (data) => client.post("/damage-history/", data);
 export const resolveDamage = (id) =>
   client.patch(`/damage-history/${id}/resolve`);
-
-export const unmarkReturned = (id) =>
-  client.patch(`/transactions/${id}/unreturn`);
-
-export const unmarkSettlementComplete = (id) =>
-  client.patch(`/settlements/${id}/uncomplete`);
-
 export const unresolveDamage = (id) =>
   client.patch(`/damage-history/${id}/unresolve`);
-
-export const calculatePeriodAmount = (data) =>
-  client.post("/settlements/calculate", data);
